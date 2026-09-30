@@ -1,0 +1,25 @@
+# Thresholds for the size rules in the code standards.
+too-many-arguments-threshold = 3
+too-many-lines-threshold = 40
+cognitive-complexity-threshold = 10
+max-fn-params-bools = 0
+
+# Proper nouns of the project's domain that doc comments name constantly, so the pedantic
+# doc_markdown lint doesn't ask for backticks around them; ".." keeps clippy's defaults.
+doc-valid-idents = [".."]
+
+# Tests assert by panicking; the no-panic rules are for production code.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true
+allow-dbg-in-tests = false
+
+# Shared mutable state has no place in a functional core. Adapter crates that need one
+# allow it at the item with a reason.
+disallowed-types = [
+  { path = "std::cell::Cell", reason = "interior mutability; pass values instead" },
+  { path = "std::cell::RefCell", reason = "interior mutability; pass values instead" },
+  { path = "std::sync::Mutex", reason = "shared mutable state; adapters only, with an allow and a reason" },
+  { path = "std::sync::RwLock", reason = "shared mutable state; adapters only, with an allow and a reason" },
+]

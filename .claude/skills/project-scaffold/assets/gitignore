@@ -1,0 +1,10 @@
+/target/
+/mutants.out*/
+# Runtime state of the agent harness: file ownership per phase, and the orchestrator's
+# territories. The SessionStart hook clears both.
+.claude/locks/
+.claude/territories/
+.claude/settings.local.json
+# A property failure worth keeping becomes a named unit test; seed files are loop noise.
+proptest-regressions/
+*.proptest-regressions

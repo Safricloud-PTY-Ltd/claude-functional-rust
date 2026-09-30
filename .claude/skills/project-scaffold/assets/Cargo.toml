@@ -1,0 +1,61 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+# Every workspace crate other crates depend on is listed here as a path dependency, and every
+# third-party crate is declared once, here. Both are inherited with `{ workspace = true }`.
+# `cargo xtask check` refuses a `core` crate that depends on anything outside the workspace.
+[workspace.dependencies]
+shared = { path = "crates/shared" }
+# Third-party. Each line says which crate uses it and why.
+# xtask reads `cargo metadata` JSON.
+serde_json = "1"
+# Property tests, as a dev-dependency anywhere.
+proptest = "1"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_docs = "deny"
+unused_must_use = "deny"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+
+# Failures are values: nothing in production code may panic.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
+exit = "deny"
+
+# No debugging leftovers, no silent output from library code.
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+
+# Shape.
+cognitive_complexity = "warn"
+self_named_module_files = "deny"
+wildcard_imports = "deny"
+disallowed_types = "deny"
+
+# Build output. With full debug info, target/ once reached 300 GB for a 2 MB binary under
+# a dozen parallel agents. Tests, panics and backtraces only need file and line numbers.
+# For a debugger session, build once with CARGO_PROFILE_DEV_DEBUG=full.
+[profile.dev]
+debug = "line-tables-only"
+
+# Third-party crates: no debug info at all.
+[profile.dev.package."*"]
+debug = false

@@ -1,0 +1,57 @@
+name: ci
+
+# A PR stays in draft through its review loop and CI runs once, when it is marked ready
+# (ready_for_review). Pushes to a ready PR run it again; pushes to a draft don't.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      # rust-toolchain.toml pins the version and components; rustup installs them on first use.
+      - run: rustup show
+      # An adapter crate that links a system library installs it here, Linux only, with a
+      # comment naming the crate: `- if: runner.os == 'Linux'` then `run: sudo apt-get ...`.
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-deny,cargo-machete
+      - run: cargo xtask check
+
+  coverage:
+    name: coverage
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov
+      # The floor rises with the codebase; it never falls. main.rs files and test files are
+      # excluded. Adapter crates count: glue that only a running program exercises is checked
+      # by running it, and the workspace has to stay above the floor with it included.
+      - run: >
+          cargo llvm-cov nextest --workspace
+          --ignore-filename-regex '(main\.rs|_tests\.rs|[\/]tests[\/])'
+          --fail-under-lines 90

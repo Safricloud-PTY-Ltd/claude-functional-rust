@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Nothing leaves this machine unchecked. Enable once per clone:
+#   git config core.hooksPath .githooks
+exec cargo xtask check

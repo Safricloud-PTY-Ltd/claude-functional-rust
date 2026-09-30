@@ -1,0 +1,13 @@
+[package]
+name = "shared"
+version = "0.0.0"
+description = "Primitives any crate in the workspace may use. Depends on nothing."
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[package.metadata.standards]
+kind = "core"
+
+[lints]
+workspace = true

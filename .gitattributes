@@ -1,0 +1,3 @@
+# The hooks under .claude/hooks are bash and break with CRLF; `npx github:` installs from a
+# git checkout, so this is what keeps them LF on a Windows clone.
+* text=auto eol=lf

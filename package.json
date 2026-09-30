@@ -1,0 +1,23 @@
+{
+  "name": "create-functional-rust",
+  "version": "0.1.0",
+  "description": "Bootstrap a project with the Claude Code functional-Rust scaffold: CLAUDE.md, CONTRIBUTING.md and .claude/.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "create-functional-rust": "bin/cli.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "bin",
+    ".claude",
+    "CLAUDE.md",
+    "CONTRIBUTING.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Safricloud-PTY-Ltd/claude-functional-rust.git"
+  }
+}

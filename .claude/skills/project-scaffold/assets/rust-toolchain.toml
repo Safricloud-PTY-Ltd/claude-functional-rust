@@ -1,0 +1,8 @@
+# Pinned to an exact stable release so a lint added upstream cannot turn main red overnight.
+# 1.98.1 was the latest stable on 2026-09-17. Bumping it is a contribution: bump, run
+# `cargo xtask check`, fix what it finds.
+[toolchain]
+channel = "1.98.1"
+profile = "minimal"
+# clippy, rustfmt: the check. llvm-tools: coverage. rust-src, rust-analyzer: the editor.
+components = ["clippy", "rustfmt", "llvm-tools", "rust-src", "rust-analyzer"]

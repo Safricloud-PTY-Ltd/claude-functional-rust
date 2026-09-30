@@ -1,0 +1,5 @@
+# Bash hooks break with CRLF, and rustfmt wants LF. Everything text is LF on every platform.
+* text=auto eol=lf
+*.sh text eol=lf
+# Binary test fixtures get a line each, so git never rewrites their bytes:
+# *.bin binary
