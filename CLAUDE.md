@@ -16,13 +16,17 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
 ## Settings
 
 - **Auto-merge:** `yes` | `no` — `yes`: the orchestrator (or a solo architect) merges its
-  own PR once CI is green and the review loop, if any, is silent. `no`: it reports and stops;
+  own PR once CI is green and the review loop, if any, is complete. `no`: it reports and stops;
   the owner merges or says merge. A PR whose diff is documentation or comments only merges
   either way.
 - **PR reviewer:** `none` — `codex` or `claude`: requested when the PR is opened and after
-  every push, at most 9 times per reviewer per PR, and posts its own review. Work every review
-  to silence before merging. How to request a review, how the reviewer does one, and how to
-  answer it: **Pull request review** in `CONTRIBUTING.md`. `none`: no review step; go straight
+  every push, at most 9 times per reviewer per PR, and posts its own review. Work the reviews
+  until their findings converge to superficial nits, not until each reviewer is silent. Nits
+  are wording, naming, a missing doc line, a test that could be tighter: nothing that changes
+  behaviour or lets a wrong body pass. The owner may also call a round the last one. Then
+  handle that round's findings in one pass, list what's still open in a PR comment with the
+  decision on each, and promote the PR without requesting another round. How to request a
+  review, how the reviewer does one, and how to answer it: **Pull request review** in `CONTRIBUTING.md`. `none`: no review step; go straight
   from PR to CI to merge.
 
 With auto-merge on and no reviewer, the loop runs from the ask to the deploy with one stop:
