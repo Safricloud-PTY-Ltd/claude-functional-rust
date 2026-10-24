@@ -224,8 +224,19 @@ rest with the reason: in the inline thread with
 `gh api repos/{owner}/{repo}/pulls/N/comments/<comment id>/replies -f body='…'`, or with a
 PR comment that quotes the finding. Then push and request the next round.
 
-Stop when a round brings nothing new, or when the reviewer reaches 9/9. If findings are still
-open at the cap, list them in a PR comment with what was decided about each.
+Stop at the first of these:
+- a round brings nothing new;
+- the findings have converged to superficial nits: wording, naming, a missing doc line, a test
+  that could be tighter, nothing that changes behaviour or lets a wrong body pass a test that
+  matters;
+- the owner calls a round the last one;
+- the reviewer reaches 9/9.
+
+Handle the last round's findings in one pass, without requesting another round: fix the real
+ones, and verify with the full check. Then list every finding still open in a PR comment, with
+what was decided about each, and promote the PR. Rounds past the point of convergence cost a
+review cycle each and find less every time. In genesys-audit-injestor#6, rounds 4 to 6 found
+only rare echo cases and doc wording.
 
 ## Gotchas
 
