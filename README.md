@@ -53,10 +53,12 @@ Requirements:
 
 ```
 CLAUDE.md                     your project's instructions to Claude — fill in the placeholders
-CONTRIBUTING.md               PR review (codex or claude, off by default), target/ hygiene, gotchas
+CONTRIBUTING.md               PR review (codex or claude, off by default), Codex briefs, target/ hygiene, gotchas
+AGENTS.md                     Codex's entry point, as brief runner or reviewer, and the hook rules it keeps itself
 .claude/
   settings.json               registers the hooks and makes the orchestrator the default agent
   agents/                     orchestrator, architect, test-writer, implementor
+  codex/run-brief.sh          runs a test-writer or implementor brief on Codex (Brief runner: codex, off by default)
   hooks/                      write guard, git guard, territories, post-edit rustfmt/clippy/tests
   skills/
     code-standards/           the rulebook: how every crate, function, error and test is written

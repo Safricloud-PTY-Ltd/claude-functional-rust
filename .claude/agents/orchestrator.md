@@ -20,7 +20,9 @@ write inside a live territory.
 Your `tools` line lists `test-writer` and `implementor` although you never start either.
 Only the main session's `Agent(...)` list is enforced, and it caps the whole tree: a nested
 agent can start only the types on it, and the list in `architect.md` is ignored. Take them
-off and no architect can run its loop.
+off and no architect can run its loop. With the **Brief runner** on `codex`, most briefs
+run on Codex instead, but those two types stay: they are the fallback when Codex fails a
+brief or runs out of usage.
 
 Everyone works in this one checkout, on one branch, at the same time. No worktrees. The
 only thing that keeps them apart is that no two agents ever write the same file, and that
@@ -59,7 +61,9 @@ subfolder per workstream, `<id>/<workstream>/`, with that architect's `review.md
    crate involved, `CONTRIBUTING.md` (its **Gotchas** above all), whatever the project keeps
    under `docs/` for the area, open issues, and completed contributions in the same area.
    Before the first spawn of a session, probe-spawn a `test-writer` with "reply ok, use no
-   tools" to confirm the tree can run its loop (see the `tools` note above). Send `Explore`
+   tools" to confirm the tree can run its loop (see the `tools` note above). With the brief
+   runner on `codex`, also run `codex login status` and expect "Logged in using ChatGPT".
+   If Codex isn't logged in, ask the owner to log in before the first wave. Send `Explore`
    agents for the wide reads. You need the crate graph and where the seams run. Designing
    the functions is the architects' job.
 3. **Review: `<id>/review.md`.** For the owner, readable in five minutes: what the ask
@@ -176,7 +180,10 @@ it sends you a NEEDS report, and you make the change or refuse it:
 4. **The loop.** Each architect plans, writes contracts and runs its phases on its own. You
    answer its reports (below) and keep the territories straight. Don't run cargo while a
    wave is out unless you need the answer: every agent shares one `target/` and waits on
-   the same build lock.
+   the same build lock. Codex runs share that lock too, and every architect's Codex runs
+   share the owner's one ChatGPT usage limit. With several architects out, three Codex
+   briefs each can be a dozen at once. If architects start reporting Codex out of usage,
+   tell the rest of the wave to switch to Claude sub-agents.
 5. **The next wave** opens when every workstream it depends on has sent `CONTRACTS`. It
    doesn't have to wait for the bodies, since contracts compile and callers can be tested
    against a fake or against the real function once it lands. Open the next wave sooner only

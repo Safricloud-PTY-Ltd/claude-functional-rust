@@ -88,8 +88,8 @@ if [[ "$agent_type" == implementor ]] && ! grep -q '@stub' "$path"; then
   deny "$rel has no @stub marker, so it is not open for implementation. Implemented files, lib.rs, mod.rs and types.rs are the architect's."
 fi
 
-# Created atomically (noclobber opens with O_EXCL), so two agents racing for one file can't
-# both take it.
+# Created atomically (noclobber opens with O_EXCL), as run-brief.sh does, so a racing agent
+# or Codex run can't both take the file.
 ( set -C; printf '%s' "$agent_id" > "$lock" ) 2>/dev/null && exit 0
 [[ "$(cat "$lock" 2>/dev/null)" == "$agent_id" ]] || deny "$rel is owned by another agent this phase. Report the overlap under Blocked on."
 exit 0
