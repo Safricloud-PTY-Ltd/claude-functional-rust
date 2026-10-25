@@ -71,11 +71,13 @@ fails on Windows' path-length limit once `target/` exists.)
 
 **Codex.** Inside Codex's sandbox, `gh` can't reach the system keyring, so the token goes in
 as `GH_TOKEN` for this one run. `workspace-write` with network on is the least access under
-which posting works.
+which posting works. `TIER` follows the **Codex speed** setting: `fast` is
+`-c service_tier=priority`, `ultrafast` is `-c service_tier=ultrafast`, `base` is empty.
 
 ```bash
+TIER=""   # Codex speed: base
 printf 'You are the codex reviewer, running GPT-6 Astra at medium effort. Review pull request #%s as review %s of 9 by following "Doing a review" in CONTRIBUTING.md exactly.\n' "$N" "$ROUND" |
-  GH_TOKEN="$(gh auth token)" codex exec -m gpt-6-astra -c model_reasoning_effort=medium \
+  GH_TOKEN="$(gh auth token)" codex exec -m gpt-6-astra -c model_reasoning_effort=medium $TIER \
     -s workspace-write -c sandbox_workspace_write.network_access=true \
     -c shell_environment_policy.inherit=all -c shell_environment_policy.ignore_default_excludes=true -
 ```

@@ -29,6 +29,9 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
   decision on each, and promote the PR without requesting another round. How to request a
   review, how the reviewer does one, and how to answer it: **Pull request review** in `CONTRIBUTING.md`. `none`: no review step; go straight
   from PR to CI to merge.
+- **Codex speed:** `base` — `base`, `fast` or `ultrafast`: the service tier for every Codex
+  run. `fast` is about twice as quick and uses more of the ChatGPT allowance; `ultrafast` is
+  quicker still.
 
 With auto-merge on and no reviewer, the loop runs from the ask to the deploy with one stop:
 the questions.
