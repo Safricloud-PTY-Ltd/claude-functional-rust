@@ -27,8 +27,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      # rust-toolchain.toml pins the version and components; rustup installs them on first use.
-      - run: rustup show
+      # rust-toolchain.toml pins the version and components; `rustup install` installs them.
+      - run: rustup install
       # An adapter crate that links a system library installs it here, Linux only, with a
       # comment naming the crate: `- if: runner.os == 'Linux'` then `run: sudo apt-get ...`.
       - uses: Swatinem/rust-cache@v2
@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: rustup show
+      - run: rustup install
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:

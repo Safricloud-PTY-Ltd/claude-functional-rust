@@ -1,4 +1,4 @@
-# cargo-deny: supply chain, licences, duplicate versions. Run by `cargo xtask check`.
+# cargo-deny: supply chain and licences; duplicate versions only warn. Run by `cargo xtask check`.
 [graph]
 all-features = true
 

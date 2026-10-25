@@ -35,7 +35,7 @@ the questions.
 
 ## Commands
 
-- Install: `rustup show` (installs the pinned toolchain), then
+- Install: `rustup install` (installs the pinned toolchain), then
   `cargo install --locked cargo-nextest cargo-deny cargo-machete cargo-llvm-cov`
   and `git config core.hooksPath .githooks`
 - Check (format + lint + tests + doc tests + supply chain + unused deps + no stubs + crate

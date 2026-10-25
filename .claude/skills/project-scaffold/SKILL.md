@@ -51,7 +51,7 @@ orchestrator's **Installing the scaffold**). Do it on a `chore/<yyyy-mm-dd>-scaf
 2. Install the toolchain once per machine and enable the hook once per clone:
 
    ```bash
-   rustup show                                   # installs the toolchain pinned in rust-toolchain.toml
+   rustup install                                # installs the toolchain pinned in rust-toolchain.toml
    cargo install --locked cargo-nextest cargo-deny cargo-machete cargo-llvm-cov
    git config core.hooksPath .githooks
    ```
