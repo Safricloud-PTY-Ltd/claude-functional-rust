@@ -102,8 +102,10 @@ contribution turns it back on.
 - **`stub!` passes clippy on purpose.** The panic lint does not look inside a macro from another
   crate, which is what lets a workspace full of stubs stay green during the loop. The `no-stubs`
   step is what stops one from merging. Its search is line-anchored (`^[[:space:]]*stub!\(`), so
-  a string or a doc that mentions the macro doesn't match, and it skips `crates/shared`, which
-  defines and tests the macro.
+  a string or a doc that mentions the macro doesn't match. It searches untracked files too
+  (`--untracked`; ignored files stay out), since a new contract file is untracked mid-phase. It
+  skips `crates/shared`, which defines and tests the macro, and `.claude`, where this skill's
+  template copy of `crates/shared` lives.
 - **Tests are exempt from the no-panic lints** through the `allow-*-in-tests` keys in
   `clippy.toml`; panicking is how a test fails. The keys cover `#[test]` functions only, not
   helpers in test files.
@@ -149,13 +151,13 @@ contribution turns it back on.
 
 ## Versions
 
-Validated on 2026-09-30 on Windows 11 with rustc 1.98.1, clippy and rustfmt from the same
+Validated on 2026-10-25 on Windows 11 with rustc 1.98.1, clippy and rustfmt from the same
 toolchain, and cargo-nextest, cargo-deny and cargo-machete at the versions
-`cargo install --locked` resolved that day. The assets were copied into an empty git
-repository exactly as the procedure above says, and `cargo xtask check` ran green, all eight
-steps, then failed at the right step and with exit code 1 on each of five deliberate
-violations: an `unwrap` in a core crate (`clippy`), a third-party dependency in a core crate
-(`purity`), a crate with no kind (`purity`), a leftover `stub!` (`no-stubs`), and a
+`cargo install --locked` resolved that day. With the assets installed as the procedure above
+says, `cargo xtask check` ran green, all eight steps, then failed at the right step and with
+exit code 1 on each of five deliberate violations: an `unwrap` in a core crate (`clippy`), a
+third-party dependency in a core crate (`purity`, and `machete` since it is unused), a crate
+with no kind (`purity`), a leftover `stub!` in an untracked file (`no-stubs`), and a
 misformatted file (`fmt`).
 
 The hooks are the ones in use in the project this scaffold was taken from, where on

@@ -61,8 +61,8 @@ and the plan, and nothing else. Everything else is git history, the PR, and GitH
    loop's pushes don't each cost a full CI run. The body has the ask and its source, what
    changed and why, what you verified, a **Decisions to veto** section listing every entry
    from **Decisions made mid-loop**, the deferred issues, and `Fixes #n` where there's one.
-10. **Handle review** (PR reviewer: per `CLAUDE.md`). Request a
-    `codex` review (or `claude`, when the owner asks or Codex can't run) as **Pull request
+10. **Handle review** (PR reviewer: per `CLAUDE.md`). Request the setting's reviewer, or
+    both (`claude` alone when Codex can't run), as **Pull request
     review** in `CONTRIBUTING.md` describes: when the PR opens and after every push, at most
     9 per reviewer per PR, and confirm the round's review landed on the PR. Reviewer comments
     are claims. Check each against the code, fix the real ones, reply to the rest with the

@@ -5,7 +5,7 @@ use proptest::prelude::*;
 use super::run;
 use crate::core::check_steps;
 use crate::shell::FakeRunCommand;
-use crate::types::{Captured, CommandLine, Expectation, RunOutput, SpawnFailed};
+use crate::types::{Captured, CommandLine, Expectation, RunOutput, SpawnFailed, Step};
 
 /// `cargo metadata` output describing a workspace the purity rule has nothing to say about.
 const PURE_METADATA: &str = r#"{"packages":[{"name":"shared","metadata":{"standards":{"kind":"core"}},"dependencies":[]}]}"#;
@@ -22,6 +22,21 @@ const ALL_OK_REPORT: &str = concat!(
     "ok    purity\n",
     "check: 8 passed, 0 failed\n",
 );
+
+/// Answers one step the way a clean workspace would: the exit code its expectation calls a
+/// pass, and for the purity step [`PURE_METADATA`] on standard output.
+fn favourable_answer(step: &Step) -> Captured {
+    let (exit_code, stdout) = match step.expectation {
+        Expectation::ExitZero => (0, ""),
+        Expectation::NoMatches => (1, ""),
+        Expectation::PureCoreCrates => (0, PURE_METADATA),
+    };
+    Captured {
+        exit_code: Some(exit_code),
+        stdout: String::from(stdout),
+        stderr: String::new(),
+    }
+}
 
 #[test]
 fn returns_exit_code_two_and_the_usage_lines_when_there_are_no_arguments() {
@@ -87,23 +102,7 @@ fn returns_exit_code_zero_and_an_ok_line_per_step_when_every_step_is_answered_fa
     let responses: Vec<(CommandLine, Result<Captured, SpawnFailed>)> = check_steps()
         .into_iter()
         .map(|step| {
-            let captured = match step.expectation {
-                Expectation::ExitZero => Captured {
-                    exit_code: Some(0),
-                    stdout: String::new(),
-                    stderr: String::new(),
-                },
-                Expectation::NoMatches => Captured {
-                    exit_code: Some(1),
-                    stdout: String::new(),
-                    stderr: String::new(),
-                },
-                Expectation::PureCoreCrates => Captured {
-                    exit_code: Some(0),
-                    stdout: String::from(PURE_METADATA),
-                    stderr: String::new(),
-                },
-            };
+            let captured = favourable_answer(&step);
             (step.command_line, Ok(captured))
         })
         .collect();
@@ -124,23 +123,7 @@ fn returns_exit_code_zero_and_the_same_report_when_check_is_followed_by_further_
     let responses: Vec<(CommandLine, Result<Captured, SpawnFailed>)> = check_steps()
         .into_iter()
         .map(|step| {
-            let captured = match step.expectation {
-                Expectation::ExitZero => Captured {
-                    exit_code: Some(0),
-                    stdout: String::new(),
-                    stderr: String::new(),
-                },
-                Expectation::NoMatches => Captured {
-                    exit_code: Some(1),
-                    stdout: String::new(),
-                    stderr: String::new(),
-                },
-                Expectation::PureCoreCrates => Captured {
-                    exit_code: Some(0),
-                    stdout: String::from(PURE_METADATA),
-                    stderr: String::new(),
-                },
-            };
+            let captured = favourable_answer(&step);
             (step.command_line, Ok(captured))
         })
         .collect();
@@ -172,23 +155,7 @@ fn judges_every_later_step_when_a_step_in_the_middle_fails() {
                     stderr: String::new(),
                 }
             } else {
-                match step.expectation {
-                    Expectation::ExitZero => Captured {
-                        exit_code: Some(0),
-                        stdout: String::new(),
-                        stderr: String::new(),
-                    },
-                    Expectation::NoMatches => Captured {
-                        exit_code: Some(1),
-                        stdout: String::new(),
-                        stderr: String::new(),
-                    },
-                    Expectation::PureCoreCrates => Captured {
-                        exit_code: Some(0),
-                        stdout: String::from(PURE_METADATA),
-                        stderr: String::new(),
-                    },
-                }
+                favourable_answer(&step)
             };
             (step.command_line, Ok(captured))
         })

@@ -23,8 +23,8 @@ It still grows, because cargo never deletes stale build variants. So:
 ## Pull request review
 
 The **PR reviewer** setting in `CLAUDE.md` decides whether this section applies. With `none`,
-skip it: a PR goes from draft to ready to merge. With `codex` or `claude`, pull requests are
-reviewed by that model on request, never automatically.
+skip it: a PR goes from draft to ready to merge. With `codex`, `claude` or `both`, pull
+requests are reviewed by that model, or each of them, on request, never automatically.
 
 | Reviewer | Model | How it starts |
 |---|---|---|
@@ -82,16 +82,19 @@ printf 'You are the codex reviewer, running GPT-6 Astra at medium effort. Review
 
 **Claude.** `--setting-sources user` keeps this repo's `agent: orchestrator` default and its hooks
 out of the reviewer's session. `dontAsk` refuses anything not on the allow-list, so the
-reviewer can read, run a crate's tests, and talk to GitHub, but can't edit files or run git
-commands that change state.
+reviewer can read, run a crate's tests, and talk to GitHub, but can't edit files outside
+`target/review/` or run git commands that change state. `Edit(target/review/**)` is what
+admits the Write tool there (a `Write(...)` rule is not matched), and the review payload goes
+through a file in it: a here-document on `gh api --input -` is refused under `dontAsk`.
 
 ```bash
 printf 'You are the claude reviewer, running Claude Opus at high effort. Review pull request #%s as review %s of 9 by following "Doing a review" in CONTRIBUTING.md exactly.\n' "$N" "$ROUND" |
   claude -p --model opus --effort high --setting-sources user \
     --permission-mode dontAsk --no-session-persistence \
-    --allowedTools Read Grep Glob "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" \
-      "Bash(git rev-parse:*)" "Bash(gh pr view:*)" "Bash(gh pr diff:*)" "Bash(gh api:*)" \
-      "Bash(gh pr comment:*)" "Bash(cargo nextest run:*)"
+    --allowedTools Read Grep Glob "Edit(target/review/**)" "Bash(git status:*)" \
+      "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" "Bash(git rev-parse:*)" \
+      "Bash(gh pr view:*)" "Bash(gh pr diff:*)" "Bash(gh api:*)" "Bash(gh pr comment:*)" \
+      "Bash(cargo nextest run:*)"
 ```
 
 A review takes minutes, so run it in the background. When it exits, check that the round's
@@ -201,9 +204,10 @@ post it, and say what you checked.
    JSON
    ```
 
-   Send the payload on stdin as shown. If your shell can't take a here-document, write the
-   payload to `target/review/<reviewer>-<n>.json` (gitignored) and pass that path to
-   `--input`. With no inline findings, send `"comments": []`.
+   Send the payload on stdin as shown. If your shell can't take a here-document (the claude
+   reviewer's can't), write the payload with your file tool to
+   `target/review/<reviewer>-<n>.json` (gitignored) and pass that path to `--input`. With no
+   inline findings, send `"comments": []`.
 
    GitHub rejects the **whole** review (HTTP 422) if any inline comment points at a line
    outside the diff. On a 422, move every inline finding into the body under **Findings**,

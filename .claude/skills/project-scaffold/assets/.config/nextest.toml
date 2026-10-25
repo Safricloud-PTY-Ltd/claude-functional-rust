@@ -2,6 +2,3 @@
 fail-fast = false
 status-level = "fail"
 final-status-level = "fail"
-
-[profile.ci]
-fail-fast = false

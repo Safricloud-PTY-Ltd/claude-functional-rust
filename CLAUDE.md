@@ -19,8 +19,9 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
   own PR once CI is green and the review loop, if any, is complete. `no`: it reports and stops;
   the owner merges or says merge. A PR whose diff is documentation or comments only merges
   either way.
-- **PR reviewer:** `none` — `codex` or `claude`: requested when the PR is opened and after
-  every push, at most 9 times per reviewer per PR, and posts its own review. Work the reviews
+- **PR reviewer:** `none` — `codex`, `claude` or `both`: each reviewer is requested when the PR
+  is opened and after every push, at most 9 times per reviewer per PR, one run at a time per
+  reviewer, and posts its own review. Work the reviews
   until their findings converge to superficial nits, not until each reviewer is silent. Nits
   are wording, naming, a missing doc line, a test that could be tighter: nothing that changes
   behaviour or lets a wrong body pass. The owner may also call a round the last one. Then
