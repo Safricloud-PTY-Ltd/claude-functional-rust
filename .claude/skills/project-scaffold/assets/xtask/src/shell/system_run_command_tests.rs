@@ -102,7 +102,10 @@ fn returns_spawn_failed_when_the_working_directory_does_not_exist() {
 
 #[test]
 fn starts_the_program_in_the_configured_working_directory() {
-    let runner = SystemRunCommand::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+    // The workspace root, not the test's own working directory (the xtask crate), so the
+    // located manifest differs if the configured directory is ignored.
+    let root = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/.."));
+    let runner = SystemRunCommand::new(root.clone());
 
     let captured = runner
         .run(&CommandLine {
@@ -116,10 +119,9 @@ fn starts_the_program_in_the_configured_working_directory() {
         .expect("cargo should start");
 
     assert_eq!(captured.exit_code, Some(0));
-    assert!(
-        captured.stdout.trim_end().ends_with("Cargo.toml"),
-        "standard output was {:?}",
-        captured.stdout
+    assert_eq!(
+        std::fs::canonicalize(captured.stdout.trim_end()).expect("the located manifest exists"),
+        std::fs::canonicalize(root.join("Cargo.toml")).expect("the workspace manifest exists"),
     );
 }
 

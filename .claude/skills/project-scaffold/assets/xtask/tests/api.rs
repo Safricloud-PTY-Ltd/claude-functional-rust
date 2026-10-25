@@ -4,6 +4,8 @@
     reason = "a test may spell out its whole expected value"
 )]
 
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
 use proptest::prelude::*;
 use xtask::{
     Captured, CommandLine, Expectation, FakeRunCommand, RunCommand, SpawnFailed, Step, check_steps,
@@ -146,6 +148,28 @@ impl RunCommand for QuietSuccess {
             stdout: String::new(),
             stderr: String::new(),
         })
+    }
+}
+
+/// A runner that answers the `n`th call as the `n`th step expects, counts its calls, and notes
+/// whether any call was not the next step's command line. The fake is a stateless table, so it
+/// can't see a step that runs twice.
+struct CountingRunner {
+    steps: Vec<Step>,
+    calls: AtomicUsize,
+    out_of_order: AtomicBool,
+}
+
+impl RunCommand for CountingRunner {
+    fn run(&self, command_line: &CommandLine) -> Result<Captured, SpawnFailed> {
+        let step = self.steps.get(self.calls.fetch_add(1, Ordering::SeqCst));
+        if step.map(|step| &step.command_line) != Some(command_line) {
+            self.out_of_order.store(true, Ordering::SeqCst);
+        }
+        step.map_or_else(
+            || QuietSuccess.run(command_line),
+            |step| Ok(favourable_answer(step, PURE_METADATA)),
+        )
     }
 }
 
@@ -316,6 +340,21 @@ fn accepts_a_run_command_implemented_outside_the_crate() {
         output.report
     );
     assert_eq!(output.exit_code, 1);
+}
+
+#[test]
+fn check_calls_the_runner_exactly_once_per_step_in_step_order() {
+    let runner = CountingRunner {
+        steps: check_steps(),
+        calls: AtomicUsize::new(0),
+        out_of_order: AtomicBool::new(false),
+    };
+
+    let output = run(&check_args(), &runner);
+
+    assert_eq!(output.exit_code, 0, "{}", output.report);
+    assert_eq!(runner.calls.load(Ordering::SeqCst), check_steps().len());
+    assert!(!runner.out_of_order.load(Ordering::SeqCst));
 }
 
 proptest! {

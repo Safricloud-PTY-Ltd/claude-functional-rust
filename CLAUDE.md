@@ -19,8 +19,9 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
   own PR once CI is green and the review loop, if any, is complete. `no`: it reports and stops;
   the owner merges or says merge. A PR whose diff is documentation or comments only merges
   either way.
-- **PR reviewer:** `none` — `codex` or `claude`: requested when the PR is opened and after
-  every push, at most 9 times per reviewer per PR, and posts its own review. Work the reviews
+- **PR reviewer:** `none` — `codex`, `claude` or `both`: each reviewer is requested when the PR
+  is opened and after every push, at most 9 times per reviewer per PR, one run at a time per
+  reviewer, and posts its own review. Work the reviews
   until their findings converge to superficial nits, not until each reviewer is silent. Nits
   are wording, naming, a missing doc line, a test that could be tighter: nothing that changes
   behaviour or lets a wrong body pass. The owner may also call a round the last one. Then
@@ -28,13 +29,16 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
   decision on each, and promote the PR without requesting another round. How to request a
   review, how the reviewer does one, and how to answer it: **Pull request review** in `CONTRIBUTING.md`. `none`: no review step; go straight
   from PR to CI to merge.
+- **Codex speed:** `base` — `base`, `fast` or `ultrafast`: the service tier for every Codex
+  run. `fast` is about twice as quick and uses more of the ChatGPT allowance; `ultrafast` is
+  quicker still.
 
 With auto-merge on and no reviewer, the loop runs from the ask to the deploy with one stop:
 the questions.
 
 ## Commands
 
-- Install: `rustup show` (installs the pinned toolchain), then
+- Install: `rustup install` (installs the pinned toolchain), then
   `cargo install --locked cargo-nextest cargo-deny cargo-machete cargo-llvm-cov`
   and `git config core.hooksPath .githooks`
 - Check (format + lint + tests + doc tests + supply chain + unused deps + no stubs + crate

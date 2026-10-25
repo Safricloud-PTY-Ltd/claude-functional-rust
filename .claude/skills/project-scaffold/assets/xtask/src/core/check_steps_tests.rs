@@ -148,7 +148,7 @@ fn sixth_step_starts_the_cargo_machete_binary_with_no_arguments() {
 }
 
 #[test]
-fn seventh_step_greps_rust_files_outside_shared_for_a_stub_body() {
+fn seventh_step_greps_tracked_and_untracked_rust_files_outside_shared_for_a_stub_body() {
     let pattern = "^[[:space:]]*stub!\\(";
     assert_eq!(pattern.chars().count(), 20);
     assert_eq!(
@@ -157,9 +157,19 @@ fn seventh_step_greps_rust_files_outside_shared_for_a_stub_body() {
             name: "no-stubs".to_owned(),
             command_line: CommandLine {
                 program: "git".to_owned(),
-                args: ["grep", "-n", "-E", pattern, "--", "*.rs", ":!crates/shared",]
-                    .map(String::from)
-                    .to_vec(),
+                args: [
+                    "grep",
+                    "--untracked",
+                    "-n",
+                    "-E",
+                    pattern,
+                    "--",
+                    "*.rs",
+                    ":!crates/shared",
+                    ":!.claude",
+                ]
+                .map(String::from)
+                .to_vec(),
             },
             expectation: Expectation::NoMatches,
         }

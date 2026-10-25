@@ -102,7 +102,7 @@ what would change on the other side?* If nothing, there is no boundary to draw.
 
 - Third-party crates are declared once in the root `[workspace.dependencies]` and inherited
   with `{ workspace = true }`. Adding one is an architect decision recorded in the plan, and
-  `cargo deny check` must pass (licences, advisories, duplicate versions).
+  `cargo deny check` must pass (licences, advisories; duplicate versions only warn).
 - `core` crates: `#![forbid(unsafe_code)]` in `lib.rs`, no runtime third-party dependencies,
   no `std::fs`, `std::net`, `std::process`, `std::env`, `std::time::SystemTime`/`Instant`,
   threads or channels. Bytes in, values out.
