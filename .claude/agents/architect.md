@@ -176,13 +176,20 @@ You brief, verify, and decide; sub-agents write the code.
 - **Each phase runs T, then I.** Dispatch every `T-<phase>.<item>` brief at once. When they
   return, confirm each test file fails with `not implemented: <fn_name>` and not with a compile error.
   Then dispatch every `I-<phase>.<item>` brief at once.
+- **Who runs a brief** follows the **Brief runner** setting in `CLAUDE.md`. With `codex`,
+  each brief goes to Codex through `.claude/codex/run-brief.sh`, at most three at once,
+  exactly as **Delegating a brief to Codex** in `CONTRIBUTING.md` describes. A Claude
+  `test-writer` or `implementor` takes a brief only when Codex has failed it twice, or when
+  Codex is out of usage. No hook guards a Codex run, so after each one, read its `.stray`
+  list before anything else.
 - **Sub-agents validate narrowly.** The brief names the exact commands: the file's own tests,
   clippy on its crate, rustfmt on its path. Never the full suite, E2E, builds, or anything slow;
   several agents doing that in parallel is what makes the loop crawl. If a sub-agent needs
   more, it says so in its report.
 - **Blocked is a question for you, not a stop.** Answer NEEDS, BLOCKED, and CLARIFY reports
-  (below), then resume the same sub-agent by its id so it keeps its context. Don't spawn a
-  fresh agent to finish another's brief.
+  (below), then resume the same sub-agent by its id so it keeps its context. A Codex run
+  resumes with `run-brief.sh --resume <brief> <answer-file>`, which continues its session.
+  Don't spawn a fresh agent to finish another's brief.
 - **Verify every phase, you, once.** Run the full check on the result. Read the diff of
   anything load-bearing. `git grep` every new function name for a second definition.
   Revert one implementation and watch its test go red. Walk the standards checklist on each
@@ -199,6 +206,9 @@ You brief, verify, and decide; sub-agents write the code.
 
 A brief is the sub-agent's entire task. It arrives with `CLAUDE.md` and the standards skill
 and nothing else, so the brief names everything: every file to read, every command to run.
+Codex gets the same brief from a file, and `AGENTS.md` in place of the preloaded context.
+Every brief has a `Write:` line naming each file it may write. For Codex, the line is the
+only fence: `run-brief.sh` locks those paths and flags any other path that changed.
 
 Test-writer:
 
@@ -218,6 +228,7 @@ Implementor:
 ```
 Brief I-2.3 — contribution 2026-09-05-order-totals
 Contract: crates/orders/src/pricing/line_total.rs
+Write: crates/orders/src/pricing/line_total.rs
 Tests (red, do not edit): crates/orders/src/pricing/line_total_tests.rs
 Approach: sum price × quantity, apply the discount, round half-up with round_minor
 Calls you will use: crates/money/src/round_minor.rs (implemented), crates/orders/src/types.rs
@@ -317,7 +328,10 @@ sub-agent), build there with `CARGO_INCREMENTAL=0`, and delete both when the pha
 **Disk** in `CONTRIBUTING.md`.
 
 **Waiting.** Ending your turn is how you wait for the orchestrator. Never end it while one
-of your sub-agents is still running. Wait for every report first.
+of your sub-agents or Codex runs is still going. Wait for every report first. A Codex run is
+done when its `.exit` file exists. Wait on that file with a loop, not on the
+background-task notice, which may reach the orchestrator instead of you. Your locks release
+(`rm -f .claude/locks/crates__billing__*`) frees Codex's `codex-<id>` locks too.
 
 **Being resumed.** The orchestrator's message is one of these:
 - answers to your questions;

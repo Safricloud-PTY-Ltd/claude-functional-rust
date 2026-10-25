@@ -20,6 +20,83 @@ It still grows, because cargo never deletes stale build variants. So:
 - **Editors share it.** rust-analyzer's check writes into `target/` too. That's fine, since it
   uses the same profile, but it rebuilds as soon as `target/` is cleaned.
 
+## Delegating a brief to Codex
+
+Applies when `CLAUDE.md`'s **Brief runner** is `codex`. Each test-writer (`T-…`) and
+implementor (`I-…`) brief goes to Codex instead of a Claude sub-agent. Codex reads
+`AGENTS.md` by itself, which sends it to `CLAUDE.md`, the code-standards skill and its role
+file. No Claude Code hook runs for Codex: `run-brief.sh` takes the brief's file locks and
+lists what the run touched, `AGENTS.md` states the rest of the rules, and you verify.
+
+### 1. Write the brief
+
+Use the architect's brief format, in `<scratch>/codex/<id>.brief` (e.g. `T-app-5.3.brief`),
+written with the Write tool. It needs a `Write:` line of bare repo-relative paths (or `none`):
+the test file for a T brief; for an I brief every file carrying a stub tagged with its item.
+Prose goes on the next line; any word without a `/` exits 64. The script adds the role
+header. Every T brief says "import builders and strategies from test-support; one another
+test file would want is a Clarify, never a copy".
+
+### 2. Run it
+
+```bash
+.claude/codex/run-brief.sh <scratch>/codex/<id>.brief            # medium effort
+.claude/codex/run-brief.sh <scratch>/codex/<id>.brief high       # a hard body, or a property-heavy test file
+```
+
+From the repo root, with `run_in_background: true` (never a shell `&`), one Bash call per
+brief, at most three at once. Codex gets `workspace-write` with your PATH and no network.
+`RUN_BRIEF_MODEL` overrides the model, and `RUN_BRIEF_SPEED` the **Codex speed** setting
+(`base`, `fast` → service tier `priority`, `ultrafast` → `ultrafast`). Beside the brief the script writes `.prompt`, `.out`
+(full log), `.report` (last message), `.touched`, `.stray` and, last, `.exit` (plus its own
+`.allowed`, `.before` and `.after`); its header lists the exit codes.
+
+Wait on your own ids' `.exit` files, not on the background-task notice, in a Bash call with
+`timeout: 600000`, repeated until each exists:
+
+```bash
+for i in $(seq 38); do ls <scratch>/codex/{T-app-5.3,T-app-5.4}.exit >/dev/null 2>&1 && break; sleep 15; done
+```
+
+A mistyped brief path writes no `.exit`, so if the loop runs out, read the run's own output
+first. Delete a brief's old `.exit` in the foreground before relaunching it. Never end your turn
+while a run is out. Keep commits and dispatches in separate Bash calls.
+
+### 3. Check what it touched
+
+- **Locks.** The script exits 3, before Codex starts, if another agent holds a `Write:` path,
+  then locks them as `codex-<id>`. Your per-phase lock release frees them. Delete a brief's
+  `codex-<id>` locks before handing it to a Claude sub-agent.
+- **Strays.** `.touched` lists every non-ignored path whose content changed during the run;
+  `.stray` those not on `Write:` (exit 4; a non-zero Codex exit is 70 and wins over it, with
+  both lists still written). Siblings edit the same checkout, so check the
+  locks, the other briefs' `Write:` lines and `git diff` before calling a stray Codex's.
+  Undo Codex's strays in your territory with Edit; report others to the orchestrator.
+
+### 4. Verify and resume
+
+- Read `.report` (or the end of `.out`), then verify as for any sub-agent, plus
+  `rustfmt --check --edition 2024` on every file it wrote.
+- Answer a NEEDS, CLARIFY or BLOCKED by resuming the same session. Widen `Write:` first if
+  the answer adds files:
+
+  ```bash
+  .claude/codex/run-brief.sh --resume <scratch>/codex/<id>.brief <scratch>/codex/<id>.answer-1
+  ```
+
+- If the patch tool stalls ("patch is pending"), resume with "write whole files".
+
+### Limits
+
+- Three runs at once per architect, never two on one file. All architects share one ChatGPT
+  limit and one cargo build lock.
+- Group two to four related contracts per brief.
+- Two failed runs (unverifiable report, stray edit, no report) hand the brief to a Claude
+  sub-agent; record it under **Deviations**. Out of usage: switch the rest of the phase.
+- Run `cargo fetch` before a phase whose manifests changed; the sandbox can't download.
+- A failure that needs a device, socket or certificate store may be the sandbox: re-run it
+  outside before calling it real. A crate that needs a device checks the sandbox can open it before its first brief.
+
 ## Pull request review
 
 The **PR reviewer** setting in `CLAUDE.md` decides whether this section applies. With `none`,
