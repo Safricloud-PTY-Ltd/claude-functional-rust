@@ -9,7 +9,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** What the scaffold ships into a new project, relative to the package root. */
-const PAYLOAD = ['CLAUDE.md', 'CONTRIBUTING.md', '.claude'];
+const PAYLOAD = ['CLAUDE.md', 'CONTRIBUTING.md', 'AGENTS.md', '.claude'];
 
 /** Payload paths that belong to the source repo alone, or to a running session, and must never be shipped. */
 const EXCLUDED = [
@@ -23,7 +23,7 @@ const HELP = `Bootstrap a project with the Claude Code functional-Rust scaffold.
 
   npx github:Safricloud-PTY-Ltd/claude-functional-rust [directory] [--force]
 
-  directory   Where to write CLAUDE.md, CONTRIBUTING.md and .claude/. Defaults to the
+  directory   Where to write CLAUDE.md, CONTRIBUTING.md, AGENTS.md and .claude/. Defaults to the
               current directory.
   --force     Overwrite files that already exist. Without it they are left alone.
   --help      Show this message.`;

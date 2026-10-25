@@ -29,9 +29,15 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
   decision on each, and promote the PR without requesting another round. How to request a
   review, how the reviewer does one, and how to answer it: **Pull request review** in `CONTRIBUTING.md`. `none`: no review step; go straight
   from PR to CI to merge.
+- **Brief runner:** `claude` — `claude` or `codex`: who runs test-writer and implementor
+  briefs. `claude`: Claude sub-agents. `codex`: architects send each brief to Codex (through
+  the Codex CLI, on the owner's ChatGPT subscription) with `.claude/codex/run-brief.sh`, at
+  most three at once per architect, and a Claude sub-agent takes a brief when Codex fails it
+  twice or runs out of usage. How to brief, run, check and resume a Codex run: **Delegating a
+  brief to Codex** in `CONTRIBUTING.md`.
 - **Codex speed:** `base` — `base`, `fast` or `ultrafast`: the service tier for every Codex
-  run. `fast` is about twice as quick and uses more of the ChatGPT allowance; `ultrafast` is
-  quicker still.
+  run, briefs and reviews alike. `fast` is about twice as quick and uses more of the ChatGPT
+  allowance; `ultrafast` is quicker still. `run-brief.sh` reads this line.
 
 With auto-merge on and no reviewer, the loop runs from the ask to the deploy with one stop:
 the questions.
@@ -40,7 +46,9 @@ the questions.
 
 - Install: `rustup install` (installs the pinned toolchain), then
   `cargo install --locked cargo-nextest cargo-deny cargo-machete cargo-llvm-cov`
-  and `git config core.hooksPath .githooks`
+  and `git config core.hooksPath .githooks`. For the Codex brief runner or reviewer:
+  `npm install -g @openai/codex`, then `codex login` with the owner's ChatGPT account
+  (`codex login status` should say "Logged in using ChatGPT")
 - Check (format + lint + tests + doc tests + supply chain + unused deps + no stubs + crate
   purity): `cargo xtask check`
 - One crate's tests: `cargo nextest run -p <crate>`
@@ -75,11 +83,17 @@ Four agents, defined in `.claude/agents/`:
 - **implementor** writes one contract's body so its tests pass, and asks the architect
   for any named function it needs.
 
+With the brief runner on `codex`, the test-writer and the implementor usually run as Codex,
+not as Claude sub-agents. Codex reads `AGENTS.md`, which sends it to this file, the
+code-standards skill and the same role file in `.claude/agents/`.
+
 Everyone works in this checkout on the one branch, at the same time. There are no
 worktrees. Parallel agents never share a file. Sub-agents edit, architects commit their own
 paths, and the orchestrator does every other git operation. Hooks in `.claude/hooks/`
 enforce who may write which files (territories included), block every other state-changing
 git command for sub-agents, and run rustfmt, clippy and the related tests after every edit.
+They don't see Codex. For a Codex brief, `run-brief.sh` takes the file locks and lists every
+path the run touched, `AGENTS.md` states the rules, and the architect checks the result.
 The full workflows live in the agent files.
 
 ## Voice
@@ -125,9 +139,14 @@ crates can be tested by calling them.
 
 - **This file** is workspace instructions and nothing else. It is never a ledger: no open
   work, no decisions log, no status, no history. Don't add to it during a contribution.
+- **`AGENTS.md`** is Codex's entry point, as a brief runner or as the PR reviewer. It
+  points at this file and the role files rather than repeating them. It also holds the
+  rules the Claude Code hooks enforce, since no hook runs for Codex. Change it when a hook's
+  rule changes.
 - **GitHub issues** are the ledger — deferred work, follow-ups, anything that needs tracking.
 - **`CONTRIBUTING.md`** holds how pull requests are reviewed (requesting a Codex or Claude
-  review, doing one, answering one), how to keep `target/` in check, and the repo's gotchas.
+  review, doing one, answering one), how to delegate a brief to Codex, how to keep `target/`
+  in check, and the repo's gotchas.
   Read it before you start a contribution and before you open a PR.
 - **`contributions/`** holds the review and plan for each piece of work, found by its slug.
 - **`.claude/agent-memory/architect/`** is the architect's own notes on the codebase:
