@@ -31,7 +31,9 @@ lists what the run touched, `AGENTS.md` states the rest of the rules, and you ve
 ### 1. Write the brief
 
 Use the architect's brief format, in `<scratch>/codex/<id>.brief` (e.g. `T-app-5.3.brief`),
-written with the Write tool. It needs a `Write:` line of bare repo-relative paths (or `none`):
+written with the Write tool. `<scratch>` is your scratch folder: under an orchestrator, the
+`scratch` line of your territory file, the only place outside the repo the write guard lets
+you write; as the main session, your own folder in the session scratchpad. It needs a `Write:` line of bare repo-relative paths (or `none`):
 the test file for a T brief; for an I brief every file carrying a stub tagged with its item.
 Prose goes on the next line; any word without a `/` exits 64. The script adds the role
 header. Every T brief says "import builders and strategies from test-support; one another
@@ -51,16 +53,21 @@ brief, at most three at once. Codex gets `workspace-write` with your PATH and no
 (full log), `.report` (last message), `.touched`, `.stray` and, last, `.exit` (plus its own
 `.allowed`, `.before` and `.after`); its header lists the exit codes.
 
-Wait on your own ids' `.exit` files, not on the background-task notice, in a Bash call with
-`timeout: 600000`, repeated until each exists:
+Wait on your own runs with `wait-briefs.sh`, not on the background-task notice, in a Bash
+call with `timeout: 600000`:
 
 ```bash
-for i in $(seq 38); do ls <scratch>/codex/{T-app-5.3,T-app-5.4}.exit >/dev/null 2>&1 && break; sleep 15; done
+.claude/codex/wait-briefs.sh <scratch>/codex/T-app-5.3.brief <scratch>/codex/T-app-5.4.brief
 ```
 
-A mistyped brief path writes no `.exit`, so if the loop runs out, read the run's own output
-first. Delete a brief's old `.exit` in the foreground before relaunching it. Never end your turn
-while a run is out. Keep commits and dispatches in separate Bash calls.
+It prints one line per brief and exits 0 when every run has written its `.exit`, 3 when its
+540-second limit came first (call it again), and 4 when a run died: no `.exit`, and the
+process in its `.pid` is gone, so its background task was killed. A dead run's touched list
+was never written and its `codex-<id>` locks are still held: read its `.out` and
+`git status` before anything else. A mistyped brief path writes no `.exit` and no `.pid`, so
+it shows as dead after 30 seconds; read the run's own output. Delete a brief's old `.exit` in
+the foreground before relaunching it. Never end your turn while a run is out. Keep commits
+and dispatches in separate Bash calls.
 
 ### 3. Check what it touched
 

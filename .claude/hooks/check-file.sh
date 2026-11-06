@@ -22,7 +22,7 @@ norm() {
 }
 
 root=$(norm "${CLAUDE_PROJECT_DIR:-$PWD}")
-fields=$(node "$root/.claude/hooks/hook-input.js" tool_input.file_path agent_id agent_type 2>/dev/null) || exit 0
+fields=$(node "$root/.claude/hooks/hook-input.cjs" tool_input.file_path agent_id agent_type 2>/dev/null) || exit 0
 { read -r path; read -r agent_id; read -r agent_type; } <<<"$fields"
 
 case "$path" in *.rs) ;; *) exit 0 ;; esac

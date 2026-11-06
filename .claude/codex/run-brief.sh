@@ -16,9 +16,11 @@
 #   <id>.prompt   header + brief, as sent          <id>.out      Codex's full log (appended)
 #   <id>.report   Codex's last message, the report <id>.touched  paths whose content changed
 #   <id>.stray    touched paths not on Write:      <id>.exit     exit status, written last
+#   <id>.pid      this run's process id
 # and, for its own use, <id>.allowed, <id>.before and <id>.after, rewritten every run.
 # A usage error before the brief file is found writes no <id>.exit at all: read the output.
-# Wait on <id>.exit. Its status is 0 (clean), 3 (a lock is held by someone else, nothing
+# Wait with wait-briefs.sh, which also reports a run that died without writing <id>.exit.
+# The status in <id>.exit is 0 (clean), 3 (a lock is held by someone else, nothing
 # ran), 4 (stray paths), 64 (usage), 65 (the tree couldn't be snapshotted or compared, so
 # what the run touched is unknown), or 70 (Codex itself exited non-zero; the output's first
 # line has its status, and .touched and .stray are still written).
@@ -52,6 +54,9 @@ base="$dir/$id"
 # run's status or report.
 rm -f "$base.exit" "$base.report" "$base.touched" "$base.stray"
 finish() { printf '%s\n' "$1" > "$base.exit"; exit "$1"; }
+# This run's process, so wait-briefs.sh can tell a run that was killed (no .exit, process
+# gone) from one that is still going.
+printf '%s\n' "$$" > "$base.pid"
 bad_usage() { echo "usage: $0 [--resume] <dir>/<id>.brief [answer-file] [medium|high]" >&2; finish 64; }
 
 answer=""

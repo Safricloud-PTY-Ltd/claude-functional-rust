@@ -16,10 +16,13 @@ parallel architects.
 In a new or existing project directory:
 
 ```bash
-npx github:Safricloud-PTY-Ltd/claude-functional-rust
+npx --allow-git=all github:Safricloud-PTY-Ltd/claude-functional-rust
 git init          # if it isn't a repository yet
 claude            # starts the orchestrator; ask it to "install the scaffold"
 ```
+
+npm 12 refuses to fetch packages from git by default (`allow-git=none`, error `EALLOWGIT`).
+`--allow-git=all` lifts that for this one command.
 
 The command writes `CLAUDE.md`, `CONTRIBUTING.md` and `.claude/`, and touches nothing else.
 The first effort then installs the Rust workspace from the `project-scaffold` skill's assets:
@@ -28,7 +31,7 @@ CI, the pre-push hook, `crates/shared` and `xtask`. It fills in `CLAUDE.md`'s pl
 with you, then ends with `cargo xtask check` green.
 
 ```
-npx github:Safricloud-PTY-Ltd/claude-functional-rust [directory] [--force]
+npx --allow-git=all github:Safricloud-PTY-Ltd/claude-functional-rust [directory] [--force]
 
   directory   Where to write. Defaults to the current directory.
   --force     Overwrite files that already exist. Without it they are left alone.
@@ -160,7 +163,7 @@ project. A few things follow from that:
 To test a change to the command before it's on `main`, install from the branch:
 
 ```bash
-npx github:Safricloud-PTY-Ltd/claude-functional-rust#<branch> ../somewhere-empty
+npx --allow-git=all github:Safricloud-PTY-Ltd/claude-functional-rust#<branch> ../somewhere-empty
 ```
 
 Agent memory lives in `.claude/agent-memory/` and is deliberately kept out of git here, so

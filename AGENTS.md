@@ -55,7 +55,7 @@ NEEDS, and the architect decides where it lives.
 ## Briefs
 
 **The guards don't run for you.** In Claude Code, hooks in `.claude/hooks/` block a
-sub-agent's write outside its lane and block state-changing git. After every edit they also
+sub-agent's write outside its lane and block state-changing git and gh. After every edit they also
 format-check the file, lint its crate and run its tests. None of those hooks sees Codex.
 The rules still hold, so you keep them yourself. After your run, the architect diffs the
 tree and undoes anything outside your brief, so a stray edit only costs a round trip.
