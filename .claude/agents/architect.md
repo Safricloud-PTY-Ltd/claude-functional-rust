@@ -172,7 +172,9 @@ You brief, verify, and decide; sub-agents write the code.
   they departed from the brief. You verify, record departures under the phase's
   **Deviations**, then commit. State-changing git is blocked for sub-agents by hook.
 - **Dispatch a phase at a time.** Before dispatching a phase, `rm -rf .claude/locks` so the
-  previous phase's file ownership is released.
+  previous phase's file ownership is released. After the merge, run
+  `.claude/scripts/clear-effort-state.sh` so the next effort starts with none. Nothing
+  else clears them: no hook runs at session start.
 - **Each phase runs T, then I.** Dispatch every `T-<phase>.<item>` brief at once. When they
   return, confirm each test file fails with `not implemented: <fn_name>` and not with a compile error.
   Then dispatch every `I-<phase>.<item>` brief at once.

@@ -8,17 +8,6 @@
     "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "300"
   },
   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "startup|clear",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "rm -rf \"${CLAUDE_PROJECT_DIR}/.claude/locks\" \"${CLAUDE_PROJECT_DIR}/.claude/territories\""
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write",

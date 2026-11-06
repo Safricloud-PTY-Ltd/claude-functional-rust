@@ -130,8 +130,11 @@ contribution turns it back on.
 - **`check` captures each step's output and prints it only on failure**, after all steps have
   run; a failed step does not stop the ones after it, so one run shows every problem.
 - **Territories are runtime state.** The orchestrator writes `.claude/territories/<workstream>`
-  (glob lines and `agent <id>` lines). It's gitignored like `.claude/locks/`, and the
-  `SessionStart` hook clears both. The guards key on `agent_id`, which only a sub-agent
+  (glob lines and `agent <id>` lines). It's gitignored like `.claude/locks/`. No hook
+  clears either: a session started for a quick question in the same checkout would wipe
+  a live effort's state. The orchestrator runs `.claude/scripts/clear-effort-state.sh`
+  after the merge, or at the start of an effort once the owner confirms that the
+  leftovers it found belong to no running effort. The guards key on `agent_id`, which only a sub-agent
   has. The main session carries an `agent_type` (from the `agent` setting) but never an
   `agent_id`, so the orchestrator, or a solo architect, is never fenced. `territory.js` is
   the one reader of territory files. It canonicalises paths (resolving `..` and symlinks),
