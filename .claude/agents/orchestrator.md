@@ -55,8 +55,19 @@ subfolder per workstream, `<id>/<workstream>/`, with that architect's `review.md
 
 1. **The ask.** Restate it in one sentence with its source. Run `git status` and
    `git branch --show-current`, because the checkout is shared with the owner's other
-   sessions. Create `feat|fix|chore/<id>` from the local `main` and switch to it. From here
-   to the merge, nobody switches branches.
+   sessions. Then `ls .claude/territories .claude/locks`. Between efforts neither exists,
+   because step 11 removes both. If either does, another session may be running an effort
+   in this checkout, or an earlier effort stopped before its merge. Don't delete them on a
+   guess: ask the owner through `AskUserQuestion` which it is, and run
+   `.claude/scripts/clear-effort-state.sh` only when the owner says the effort is over.
+   Create `feat|fix|chore/<id>` from the local `main` and switch to it. From here to the
+   merge, nobody switches branches.
+
+   Only an effort touches `.claude/territories` and `.claude/locks`, and no hook clears
+   them. A session that is answering a question, reading code or making a change with no
+   Rust in it leaves both alone, because an effort in another session may be using them.
+   The script is there for whenever you need it: run it at will once you know no effort is
+   live.
 2. **Orient.** Read enough to draw the split: the workspace `Cargo.toml`, the `lib.rs` of each
    crate involved, `CONTRIBUTING.md` (its **Gotchas** above all), whatever the project keeps
    under `docs/` for the area, open issues, and completed contributions in the same area.
@@ -93,7 +104,7 @@ subfolder per workstream, `<id>/<workstream>/`, with that architect's `review.md
    **Review comments** below. Push only when every architect you resumed is back to DONE,
    because the pre-push hook runs the full check.
 11. **Promote, CI, merge, deploy.** Steps 11 to 13 of the architect's workflow, unchanged.
-    After the merge, `rm -rf .claude/territories .claude/locks`, then `cargo clean`, and
+    After the merge, run `.claude/scripts/clear-effort-state.sh`, then `cargo clean`, and
     clear the scratchpad (see **Disk** in `CONTRIBUTING.md`).
 
 **Disk.** Between waves and at every pause, when nothing is building, check `du -sh target`

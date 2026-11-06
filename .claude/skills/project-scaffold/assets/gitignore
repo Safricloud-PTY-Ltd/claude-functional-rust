@@ -1,7 +1,7 @@
 /target/
 /mutants.out*/
 # Runtime state of the agent harness: file ownership per phase, and the orchestrator's
-# territories. The SessionStart hook clears both.
+# territories. .claude/scripts/clear-effort-state.sh clears both, run by hand.
 .claude/locks/
 .claude/territories/
 .claude/settings.local.json

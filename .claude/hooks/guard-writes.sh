@@ -12,7 +12,8 @@
 #   test-writer, implementor    also inside exactly one territory, whenever any territory exists
 #   any file                    at most one sub-agent owner per phase (.claude/locks; an
 #                               architect releases its own territory's locks before each
-#                               phase, SessionStart clears them all)
+#                               phase; .claude/scripts/clear-effort-state.sh clears them all,
+#                               run by hand, never from a hook)
 #
 # Territories, and the canonical repo-relative path (.. and symlinks resolved), come from
 # territory.js, which the git guard shares.
