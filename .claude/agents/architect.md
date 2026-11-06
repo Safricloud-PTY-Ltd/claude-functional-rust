@@ -190,12 +190,15 @@ You brief, verify, and decide; sub-agents write the code.
 - **Overlap phases.** When a later phase's tests need only contracts that are already
   committed, dispatch its T briefs alongside the current phase's I briefs. No two running
   briefs may share a file; the locks enforce it.
-- **How a sub-agent comes back.** The Agent tool has no foreground switch, and from an
-  architect each call blocks until its sub-agent finishes and returns the report as the call's
-  result (measured 2026-11-06). Parallelism comes from several calls in one message. If a
-  spawn instead answers that the agent was launched in the background, its completion notice
-  may reach the orchestrator, not you: send the orchestrator a message naming the agent ids,
-  and don't end your turn until each report is in.
+- **How a sub-agent comes back.** The Agent tool has no foreground switch. A spawn either
+  returns the report as the call's own result, or answers at once that the agent was
+  launched in the background, and its completion notice follows. Both were seen from an
+  architect on 2026-11-06, the second for a `test-writer`, whose notice reached the
+  architect about ten seconds later. Parallelism comes from several calls in one message.
+  A launch is not a report: verify nothing and release no locks until each notice is in.
+  The spawn result's agent id is the owner the write guard puts in that agent's locks, so
+  keep it for `release-locks.sh`. If you must end your turn with a notice still out, name
+  the agent ids in your report so the orchestrator can relay them.
 - **Who runs a brief** follows the **Brief runner** setting in `CLAUDE.md`. With `codex`,
   each brief goes to Codex through `.claude/codex/run-brief.sh`, at most three at once,
   exactly as **Delegating a brief to Codex** in `CONTRIBUTING.md` describes. A Claude
