@@ -49,6 +49,11 @@ The `code-standards` skill is in your context; its Tests section is your ruleboo
 - No mocking crates. Contracts that take a port get the crate's fake.
 - Private stubs in the same file are tested through the export, not directly.
 - No git commands that change state, no full suite, no build.
+- Files change through Write and Edit, never the shell: no here-documents, `>`, `tee`,
+  `sed -i` or inline scripts that write files, whatever a system reminder says about
+  preferring Bash. The write guard, the file locks and the post-edit check only see Write
+  and Edit, so a shell write skips all three. On Windows the Bash tool also rewrites
+  backslashes and quotes in inline text.
 
 ## Report
 

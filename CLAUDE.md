@@ -15,10 +15,13 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
 
 ## Settings
 
-- **Auto-merge:** `yes` | `no` — `yes`: the orchestrator (or a solo architect) merges its
-  own PR once CI is green and the review loop, if any, is complete. `no`: it reports and stops;
-  the owner merges or says merge. A PR whose diff is documentation or comments only merges
-  either way.
+- **Auto-merge:** `yes` | `yes, admin` | `no` — `yes`: the orchestrator (or a solo
+  architect) merges its own PR once CI is green and the review loop, if any, is complete.
+  `yes, admin`: the same, with `gh pr merge --admin`. It is the owner's standing yes to
+  merging past a ruleset on `main` that requires an approving review no account here can
+  give (the author can't approve their own PR), and isn't asked again per PR. `no`: it
+  reports and stops; the owner merges or says merge. A PR whose diff is documentation or
+  comments only merges either way.
 - **PR reviewer:** `none` — `codex`, `claude` or `both`: each reviewer is requested when the PR
   is opened and after every push, at most 9 times per reviewer per PR, one run at a time per
   reviewer, and posts its own review. Work the reviews
@@ -26,18 +29,28 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
   are wording, naming, a missing doc line, a test that could be tighter: nothing that changes
   behaviour or lets a wrong body pass. The owner may also call a round the last one. Then
   handle that round's findings in one pass, list what's still open in a PR comment with the
-  decision on each, and promote the PR without requesting another round. How to request a
-  review, how the reviewer does one, and how to answer it: **Pull request review** in `CONTRIBUTING.md`. `none`: no review step; go straight
-  from PR to CI to merge.
+  decision on each, and promote the PR without requesting another round. A round is
+  requested with `.claude/scripts/request-review.sh`; with `both`, both reviewers are
+  requested at once. How the reviewer does one, and how to answer it: **Pull request
+  review** in `CONTRIBUTING.md`. `none`: no review step; go straight from PR to CI to merge.
 - **Brief runner:** `claude` — `claude` or `codex`: who runs test-writer and implementor
   briefs. `claude`: Claude sub-agents. `codex`: architects send each brief to Codex (through
   the Codex CLI, on the owner's ChatGPT subscription) with `.claude/codex/run-brief.sh`, at
   most three at once per architect, and a Claude sub-agent takes a brief when Codex fails it
   twice or runs out of usage. How to brief, run, check and resume a Codex run: **Delegating a
   brief to Codex** in `CONTRIBUTING.md`.
-- **Codex speed:** `base` — `base`, `fast` or `ultrafast`: the service tier for every Codex
-  run, briefs and reviews alike. `fast` is about twice as quick and uses more of the ChatGPT
-  allowance; `ultrafast` is quicker still. `run-brief.sh` reads this line.
+- **Models:** model, effort and speed per role, in `.claude/settings.json` `env`. A machine
+  overrides them in `.claude/settings.local.json`; restart Claude Code after a change.
+  - Codex test-writer and implementor briefs: `CODEX_TEST_WRITER_MODEL`, `_EFFORT`, `_SPEED`
+    and `CODEX_IMPLEMENTOR_*`. A brief's own effort argument overrides `_EFFORT` for it.
+  - PR reviewer `codex`: `CODEX_REVIEW_MODEL`, `_EFFORT`, `_SPEED`. PR reviewer `claude`:
+    `CLAUDE_REVIEW_MODEL`, `_EFFORT`.
+  - Every Claude sub-agent: `CLAUDE_CODE_SUBAGENT_MODEL`.
+  - `CODEX_ALLOWED_MODELS`, comma-separated: the only Codex models the scripts will start.
+    Effort is any level the model offers; Codex refuses an unknown one itself. Speed is
+    `base`, `fast` or `ultrafast`, sent as Codex's service tier (none, `priority`,
+    `ultrafast`). `fast` is about twice as quick and uses more of the ChatGPT allowance.
+    Codex takes an unknown tier silently, so the scripts refuse any other word.
 
 With auto-merge on and no reviewer, the loop runs from the ask to the deploy with one stop:
 the questions.

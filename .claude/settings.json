@@ -5,7 +5,19 @@
   "env": {
     "CLAUDE_CODE_SUBAGENT_MODEL": "claude-opus-5-5",
     "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "3",
-    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "300"
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "300",
+    "CODEX_ALLOWED_MODELS": "gpt-6-astra",
+    "CODEX_TEST_WRITER_MODEL": "gpt-6-astra",
+    "CODEX_TEST_WRITER_EFFORT": "medium",
+    "CODEX_TEST_WRITER_SPEED": "base",
+    "CODEX_IMPLEMENTOR_MODEL": "gpt-6-astra",
+    "CODEX_IMPLEMENTOR_EFFORT": "medium",
+    "CODEX_IMPLEMENTOR_SPEED": "base",
+    "CODEX_REVIEW_MODEL": "gpt-6-astra",
+    "CODEX_REVIEW_EFFORT": "medium",
+    "CODEX_REVIEW_SPEED": "base",
+    "CLAUDE_REVIEW_MODEL": "opus",
+    "CLAUDE_REVIEW_EFFORT": "high"
   },
   "hooks": {
     "PreToolUse": [

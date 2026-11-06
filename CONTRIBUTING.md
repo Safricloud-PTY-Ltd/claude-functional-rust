@@ -42,14 +42,18 @@ test file would want is a Clarify, never a copy".
 ### 2. Run it
 
 ```bash
-.claude/codex/run-brief.sh <scratch>/codex/<id>.brief            # medium effort
+.claude/codex/run-brief.sh <scratch>/codex/<id>.brief            # the role's effort
 .claude/codex/run-brief.sh <scratch>/codex/<id>.brief high       # a hard body, or a property-heavy test file
 ```
 
 From the repo root, with `run_in_background: true` (never a shell `&`), one Bash call per
-brief, at most three at once. Codex gets `workspace-write` with your PATH and no network.
-`RUN_BRIEF_MODEL` overrides the model, and `RUN_BRIEF_SPEED` the **Codex speed** setting
-(`base`, `fast` → service tier `priority`, `ultrafast` → `ultrafast`). Beside the brief the script writes `.prompt`, `.out`
+brief, at most three at once. Never chain a run with anything else in one command: a compound
+Codex command asks the owner for approval even in bypass-permissions mode. Codex gets
+`workspace-write` with your PATH and no network. Model, effort and speed come from the role's
+settings (`CODEX_TEST_WRITER_*`, `CODEX_IMPLEMENTOR_*`: **Models** in `CLAUDE.md`); the
+optional effort argument overrides the effort for one brief. A model outside
+`CODEX_ALLOWED_MODELS`, or a speed other than `base`, `fast` (service tier `priority`) or
+`ultrafast`, exits 64 before anything runs. Beside the brief the script writes `.prompt`, `.out`
 (full log), `.report` (last message), `.touched`, `.stray` and, last, `.exit` (plus its own
 `.allowed`, `.before` and `.after`); its header lists the exit codes.
 
@@ -72,13 +76,24 @@ and dispatches in separate Bash calls.
 ### 3. Check what it touched
 
 - **Locks.** The script exits 3, before Codex starts, if another agent holds a `Write:` path,
-  then locks them as `codex-<id>`. Your per-phase lock release frees them. Delete a brief's
-  `codex-<id>` locks before handing it to a Claude sub-agent.
+  then locks them as `codex-<id>`. Release them once you've verified the run, with
+  `.claude/scripts/release-locks.sh codex-<id>`, and before handing the brief to a Claude
+  sub-agent.
 - **Strays.** `.touched` lists every non-ignored path whose content changed during the run;
   `.stray` those not on `Write:` (exit 4; a non-zero Codex exit is 70 and wins over it, with
-  both lists still written). Siblings edit the same checkout, so check the
-  locks, the other briefs' `Write:` lines and `git diff` before calling a stray Codex's.
-  Undo Codex's strays in your territory with Edit; report others to the orchestrator.
+  both lists still written). The script's output labels each stray with its likeliest owner:
+  `locked by <owner>`, `in <workstream>'s territory` (a sibling's agent, almost always),
+  `in <yours>'s own territory` (Codex, or one of your other briefs), or `RESERVE: in no
+  territory`. Siblings edit the same checkout, so check the locks, the other briefs'
+  `Write:` lines and `git diff` before calling a stray Codex's. Undo Codex's strays in your
+  territory with Edit; report others to the orchestrator.
+- **Each run starts cold.** A permission you gave one run is unknown to the next, so put
+  every permission a brief grants in the brief itself, every time ("you may add the imports
+  the body needs" most often).
+- **Put outside facts in the brief.** The brief's own text reaches Codex in its prompt, but a
+  file outside the repo may not: in the sister TypeScript scaffold, Codex's sandbox couldn't
+  read the scratchpad or other repositories. Copy any outside fact a brief needs into the
+  brief itself, verbatim.
 
 ### 4. Verify and resume
 
@@ -112,11 +127,11 @@ requests are reviewed by that model, or each of them, on request, never automati
 
 | Reviewer | Model | How it starts |
 |---|---|---|
-| `codex` | GPT-6 Astra, `medium` effort, via the Codex CLI | By request, as below. |
-| `claude` | Claude Opus, `high` effort, via Claude Code headless | By request, as below; also the fallback when Codex can't run. |
+| `codex` | `CODEX_REVIEW_MODEL`, `_EFFORT`, `_SPEED` (**Models** in `CLAUDE.md`), via the Codex CLI | By request, as below. |
+| `claude` | `CLAUDE_REVIEW_MODEL`, `_EFFORT`, via Claude Code headless | By request, as below; also the fallback when Codex can't run. |
 
-The model names and flags below were measured on 2026-09-22. Update them here when you change
-them.
+The values live in `.claude/settings.json` `env`, and `request-review.sh` reads them. The CLI
+flags it passes were measured on 2026-09-22; update the script when they change.
 
 **A PR is opened as a draft and stays one until its review loop is complete.** CI skips
 drafts. Marking the PR ready (`gh pr ready <n>`) starts CI, so it runs once per PR and not
@@ -129,42 +144,36 @@ Code), not on API keys. Each reviewer posts its own review to the PR with the `g
 
 Request one when the PR is opened, and again after every push that changes it. Each reviewer
 reviews a PR **at most 9 times**. Every review's first line is a marker,
-`<!-- ai-review: <reviewer> <n>/9 -->`, and the count is the number of markers already on the
-PR:
+`<!-- ai-review: <reviewer> <n>/9 -->`, and the round is the number of markers already on the
+PR plus one. Request a round with the script, one Bash call per reviewer:
 
 ```bash
-N=12            # the PR number
-R=codex         # or claude
-DONE=$(gh pr view "$N" --json reviews,comments \
-  --jq "[.reviews[].body, .comments[].body] | map(select(startswith(\"<!-- ai-review: $R \"))) | length")
-ROUND=$((DONE + 1))   # stop if DONE is already 9
+.claude/scripts/request-review.sh <pr number> <codex|claude>
 ```
 
-The reviewer reads the checkout, so the checkout must be exactly the PR's head: commit
-everything, push, then check that both lines below print nothing:
+It takes minutes, so run it with `run_in_background: true`. With PR reviewer `both`, start
+both reviewers at once, one call each, and wait for both. The script:
 
-```bash
-test "$(git rev-parse HEAD)" = "$(gh pr view "$N" --json headRefOid -q .headRefOid)" || echo "checkout is not the PR head"
-git status --porcelain
-```
+- refuses a Codex model outside `CODEX_ALLOWED_MODELS` or an unknown speed, before anything
+  else (exit 64);
+- counts the reviewer's markers and stops at 9 (exit 3);
+- checks that the checkout it lives in is exactly the PR's head with a clean tree, since the
+  reviewer reads that checkout: commit everything and push first;
+- deletes a failed earlier attempt's payload, `target/review/pr<N>-<reviewer>-<n>.json`, and
+  tells the reviewer to write its payload there;
+- runs the reviewer and, when it exits, confirms that the round's marker landed. A run that
+  exits without posting fails the script (exit 1) and doesn't count against the 9: read its
+  output, fix the cause, and request again.
 
 While agents are still working in the checkout, review from a worktree at the PR head
-instead: `git worktree add --detach <scratchpad>/review-wt <head>`, run the reviewer there with
-its own `CARGO_TARGET_DIR`, then `rm -rf` it and `git worktree prune`. (`git worktree remove`
-fails on Windows' path-length limit once `target/` exists.)
+instead: `git worktree add --detach <scratchpad>/review-wt <head>`, then run the worktree's
+own copy of the script (`<scratchpad>/review-wt/.claude/scripts/request-review.sh`) with its
+own `CARGO_TARGET_DIR`, then `rm -rf` the worktree and `git worktree prune`.
+(`git worktree remove` fails on Windows' path-length limit once `target/` exists.)
 
-**Codex.** Inside Codex's sandbox, `gh` can't reach the system keyring, so the token goes in
-as `GH_TOKEN` for this one run. `workspace-write` with network on is the least access under
-which posting works. `TIER` follows the **Codex speed** setting: `fast` is
-`-c service_tier=priority`, `ultrafast` is `-c service_tier=ultrafast`, `base` is empty.
-
-```bash
-TIER=""   # Codex speed: base
-printf 'You are the codex reviewer, running GPT-6 Astra at medium effort. Review pull request #%s as review %s of 9 by following "Doing a review" in CONTRIBUTING.md exactly.\n' "$N" "$ROUND" |
-  GH_TOKEN="$(gh auth token)" codex exec -m gpt-6-astra -c model_reasoning_effort=medium $TIER \
-    -s workspace-write -c sandbox_workspace_write.network_access=true \
-    -c shell_environment_policy.inherit=all -c shell_environment_policy.ignore_default_excludes=true -
-```
+**Codex.** Inside Codex's sandbox, `gh` can't reach the system keyring, so the script passes
+`gh auth token` in as `GH_TOKEN` for that one run. `workspace-write` with network on is the
+least access under which posting works.
 
 **Claude.** `--setting-sources user` keeps this repo's `agent: orchestrator` default and its hooks
 out of the reviewer's session. `dontAsk` refuses anything not on the allow-list, so the
@@ -172,20 +181,6 @@ reviewer can read, run a crate's tests, and talk to GitHub, but can't edit files
 `target/review/` or run git commands that change state. `Edit(target/review/**)` is what
 admits the Write tool there (a `Write(...)` rule is not matched), and the review payload goes
 through a file in it: a here-document on `gh api --input -` is refused under `dontAsk`.
-
-```bash
-printf 'You are the claude reviewer, running Claude Opus at high effort. Review pull request #%s as review %s of 9 by following "Doing a review" in CONTRIBUTING.md exactly.\n' "$N" "$ROUND" |
-  claude -p --model opus --effort high --setting-sources user \
-    --permission-mode dontAsk --no-session-persistence \
-    --allowedTools Read Grep Glob "Edit(target/review/**)" "Bash(git status:*)" \
-      "Bash(git diff:*)" "Bash(git log:*)" "Bash(git show:*)" "Bash(git rev-parse:*)" \
-      "Bash(gh pr view:*)" "Bash(gh pr diff:*)" "Bash(gh api:*)" "Bash(gh pr comment:*)" \
-      "Bash(cargo nextest run:*)"
-```
-
-A review takes minutes, so run it in the background. When it exits, check that the round's
-marker is now on the PR. A run that exits without posting didn't review anything: read its
-output, fix the cause, and request again. A failed run doesn't count against the 9.
 
 On a large diff, each round says it isn't exhaustive. Aim each request at what the last
 rounds skipped (production paths, then tests and tables, then prose and fidelity), and reply
@@ -276,8 +271,10 @@ post it, and say what you checked.
    `side` is `RIGHT`, and a multi-line suggestion adds `start_line` and `start_side`. A
    suggestion replaces exactly lines `start_line` to `line`.
 
-   ```bash
-   gh api repos/{owner}/{repo}/pulls/N/reviews --method POST --input - <<'JSON'
+   Write the payload with your file tool to the payload file your request names
+   (`target/review/pr<N>-<reviewer>-<n>.json`, gitignored), then post that file:
+
+   ```json
    {
      "commit_id": "<headRefOid>",
      "event": "COMMENT",
@@ -287,13 +284,15 @@ post it, and say what you checked.
          "body": "**P1**: what is wrong and why.\n\n```suggestion\n    let total = a.checked_add(b)?;\n```" }
      ]
    }
-   JSON
    ```
 
-   Send the payload on stdin as shown. If your shell can't take a here-document (the claude
-   reviewer's can't), write the payload with your file tool to
-   `target/review/<reviewer>-<n>.json` (gitignored) and pass that path to `--input`. With no
-   inline findings, send `"comments": []`.
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/N/reviews --method POST --input target/review/pr<N>-<reviewer>-<n>.json
+   ```
+
+   Never send the payload on stdin or through a here-document: posts sent that way have been
+   lost, and the claude reviewer's shell refuses a here-document. With no inline findings,
+   send `"comments": []`.
 
    GitHub rejects the **whole** review (HTTP 422) if any inline comment points at a line
    outside the diff. On a 422, move every inline finding into the body under **Findings**,
@@ -311,8 +310,11 @@ once per run.
 This part is for the PR's author, and it applies to any human reviewer's comments too.
 A review comment is a claim. Check each one against the code. Fix the real ones. Reply to the
 rest with the reason: in the inline thread with
-`gh api repos/{owner}/{repo}/pulls/N/comments/<comment id>/replies -f body='…'`, or with a
-PR comment that quotes the finding. Then push and request the next round.
+`gh api repos/{owner}/{repo}/pulls/N/comments/<comment id>/replies -F body=@<file>` (the reply
+written to a scratch file first, so quotes and backticks survive), or with a PR comment that
+quotes the finding. Reply to every thread before the next round, which reads the replies.
+List threads with `gh api --paginate`: GitHub returns 30 at a time. Then push and request
+the next round.
 
 Stop at the first of these:
 - a round brings nothing new;
