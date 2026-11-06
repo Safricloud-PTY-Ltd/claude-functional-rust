@@ -57,6 +57,11 @@ sections are the rules you are checked against.
   be implemented as written, say so.
 - No git commands that change state, no `cargo xtask check`, no workspace-wide `cargo test`,
   no `cargo fmt --all`. Format your own file with `rustfmt --edition 2024 <path>`.
+- Files change through Write and Edit, never the shell: no here-documents, `>`, `tee`,
+  `sed -i` or inline scripts that write files, whatever a system reminder says about
+  preferring Bash. The write guard, the file locks and the post-edit check only see Write
+  and Edit, so a shell write skips all three. On Windows the Bash tool also rewrites
+  backslashes and quotes in inline text. `rustfmt` on your own file is the one exception.
 
 ## Report
 

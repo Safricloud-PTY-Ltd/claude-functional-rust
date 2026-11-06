@@ -63,9 +63,10 @@ and the plan, and nothing else. Everything else is git history, the PR, and GitH
    changed and why, what you verified, a **Decisions to veto** section listing every entry
    from **Decisions made mid-loop**, the deferred issues, and `Fixes #n` where there's one.
 10. **Handle review** (PR reviewer: per `CLAUDE.md`). Request the setting's reviewer, or
-    both (`claude` alone when Codex can't run), as **Pull request
-    review** in `CONTRIBUTING.md` describes: when the PR opens and after every push, at most
-    9 per reviewer per PR, and confirm the round's review landed on the PR. Reviewer comments
+    both at once (`claude` alone when Codex can't run), with
+    `.claude/scripts/request-review.sh <n> <codex|claude>`, as **Pull request review** in
+    `CONTRIBUTING.md` describes: when the PR opens and after every push, at most 9 per
+    reviewer per PR. The script confirms the round's review landed on the PR. Reviewer comments
     are claims. Check each against the code, fix the real ones, reply to the rest with the
     reason. Repeat until a pass brings nothing new or the cap is reached. The PR stays a
     draft the whole time.
@@ -74,8 +75,11 @@ and the plan, and nothing else. Everything else is git history, the PR, and GitH
     --watch`). If a red run needs a change, return the PR to draft (`gh pr ready <n>
     --undo`) before pushing the fix, repeat step 10 within the cap, then promote again.
     Re-running CI without changing the PR doesn't reopen the review loop.
-12. **Merge** (auto-merge: `yes`, or the diff is docs and comments only): squash, delete
-    the branch, return to `main`, report the SHA. Otherwise report the PR, its head, CI
+12. **Merge** (auto-merge: `yes` or `yes, admin`, or the diff is docs and comments only):
+    squash, delete the branch, return to `main`, report the SHA. With `yes, admin`, merge
+    with `gh pr merge --squash --delete-branch --admin`, the owner's standing yes to merging
+    past a ruleset that requires an approval no account here can give. With `yes`, a merge
+    refused by such a ruleset is reported, not forced. After the merge, `git fetch --prune`. Otherwise report the PR, its head, CI
     state and any deferred issues, then stop; the owner merges or tells you to.
 13. **Deploy** per the command in `CLAUDE.md`, after whichever merge happened, and confirm
     it landed; "it fired" is not "it worked".
@@ -172,13 +176,29 @@ You brief, verify, and decide; sub-agents write the code.
 - **Sub-agents edit; you commit.** They return what changed, what they didn't do, and where
   they departed from the brief. You verify, record departures under the phase's
   **Deviations**, then commit. State-changing git is blocked for sub-agents by hook.
-- **Dispatch a phase at a time.** Before dispatching a phase, `rm -rf .claude/locks` so the
-  previous phase's file ownership is released. After the merge, run
-  `.claude/scripts/clear-effort-state.sh` so the next effort starts with none. Nothing
-  else clears them: no hook runs at session start.
+- **Release locks by owner.** The write guard gives each file one owner, held in
+  `.claude/locks/`. When you have verified a brief, release its locks with
+  `.claude/scripts/release-locks.sh <its agent id>` (a Codex run's owner is
+  `codex-<brief id>`). That frees only that brief's files, so a later phase can already be
+  running. When nothing of yours is running, `rm -rf .claude/locks` clears any leftovers.
+  After the merge, run `.claude/scripts/clear-effort-state.sh` so the next effort starts
+  with none. Nothing else clears them: no hook runs at session start.
 - **Each phase runs T, then I.** Dispatch every `T-<phase>.<item>` brief at once. When they
   return, confirm each test file fails with `not implemented: <fn_name>` and not with a compile error.
-  Then dispatch every `I-<phase>.<item>` brief at once.
+  Then dispatch every `I-<phase>.<item>` brief at once. "At once" means concurrently, several
+  Agent calls in one message, never one after another, whoever runs the briefs.
+- **Overlap phases.** When a later phase's tests need only contracts that are already
+  committed, dispatch its T briefs alongside the current phase's I briefs. No two running
+  briefs may share a file; the locks enforce it.
+- **How a sub-agent comes back.** The Agent tool has no foreground switch. A spawn either
+  returns the report as the call's own result, or answers at once that the agent was
+  launched in the background, and its completion notice follows. Both were seen from an
+  architect on 2026-11-06, the second for a `test-writer`, whose notice reached the
+  architect about ten seconds later. Parallelism comes from several calls in one message.
+  A launch is not a report: verify nothing and release no locks until each notice is in.
+  The spawn result's agent id is the owner the write guard puts in that agent's locks, so
+  keep it for `release-locks.sh`. If you must end your turn with a notice still out, name
+  the agent ids in your report so the orchestrator can relay them.
 - **Who runs a brief** follows the **Brief runner** setting in `CLAUDE.md`. With `codex`,
   each brief goes to Codex through `.claude/codex/run-brief.sh`, at most three at once,
   exactly as **Delegating a brief to Codex** in `CONTRIBUTING.md` describes. A Claude
@@ -193,7 +213,12 @@ You brief, verify, and decide; sub-agents write the code.
   (below), then resume the same sub-agent by its id so it keeps its context. A Codex run
   resumes with `run-brief.sh --resume <brief> <answer-file>`, which continues its session.
   Don't spawn a fresh agent to finish another's brief.
-- **Verify every phase, you, once.** Run the full check on the result. Read the diff of
+- **Verify every phase, you, once, and only what it touched.** For each crate the phase
+  changed: `cargo clippy -p <crate> --all-targets --no-deps -- -D warnings`,
+  `cargo nextest run -p <crate>`, `cargo test --doc -p <crate>`, and
+  `rustfmt --check --edition 2024` on the changed files. No other crates' tests. The full
+  check (`cargo xtask check`, or the scoped check under an orchestrator) runs once, at the
+  final pass before you report DONE or open the PR, not per phase. Read the diff of
   anything load-bearing. `git grep` every new function name for a second definition.
   Revert one implementation and watch its test go red. Walk the standards checklist on each
   new file. Findings become a new item appended to the phase; fix the pattern everywhere,
@@ -319,8 +344,10 @@ read-only for you (`pr view`, `pr diff`, `pr checks`, `issue view`, `run view`, 
 `gh api`); anything that changes GitHub is the orchestrator's. Undo a deliberate-break check
 with Edit, not `git checkout`.
 
-**Locks.** Before each phase, release only your own territory's locks. A lock file is
-named after its path with `/` written as `__`, so for `crates/billing/*` run
+**Locks.** Release each verified brief's locks by owner, with
+`.claude/scripts/release-locks.sh <agent id>`, as above. When none of your briefs is
+running, you may also clear your own territory's leftovers: a lock file is named after its
+path with `/` written as `__`, so for `crates/billing/*` run
 `rm -f .claude/locks/crates__billing__*`. Never `rm -rf .claude/locks`: that frees files that
 other architects' sub-agents hold in the middle of a phase.
 
@@ -340,8 +367,8 @@ sub-agent), build there with `CARGO_INCREMENTAL=0`, and delete both when the pha
 **Waiting.** Ending your turn is how you wait for the orchestrator. Never end it while one
 of your sub-agents or Codex runs is still going. Wait for every report first. Wait on Codex
 runs with `.claude/codex/wait-briefs.sh`, not on the background-task notice, which may reach
-the orchestrator instead of you. It also tells you when a run died without finishing. Your locks release
-(`rm -f .claude/locks/crates__billing__*`) frees Codex's `codex-<id>` locks too.
+the orchestrator instead of you. It also tells you when a run died without finishing.
+Release a Codex run's locks with `release-locks.sh codex-<brief id>`.
 
 **Being resumed.** The orchestrator's message is one of these:
 - answers to your questions;

@@ -4,8 +4,13 @@
 # script stands in for them. It takes the locks for the brief's Write: paths before the run.
 # After the run it lists every path whose content changed and every one the brief didn't name.
 #
-#   .claude/codex/run-brief.sh <dir>/<id>.brief [medium|high]
-#   .claude/codex/run-brief.sh --resume <dir>/<id>.brief <answer-file> [medium|high]
+#   .claude/codex/run-brief.sh <dir>/<id>.brief [effort]
+#   .claude/codex/run-brief.sh --resume <dir>/<id>.brief <answer-file> [effort]
+#
+# Model, effort and speed come from the role's settings in .claude/settings.json env
+# (CODEX_TEST_WRITER_* or CODEX_IMPLEMENTOR_*; CLAUDE.md, Models). An effort argument
+# overrides the role's effort for this run. A model outside CODEX_ALLOWED_MODELS, or a speed
+# other than base, fast or ultrafast, exits 64 before anything runs.
 #
 # The brief file is named after its id (T-app-5.3.brief) and carries one line
 #   Write: <repo-relative path>[, <path>...]       or  Write: none
@@ -35,9 +40,7 @@
 # line first if the answer widens it.
 set -uo pipefail
 
-model="${RUN_BRIEF_MODEL:-gpt-6-astra}"
-
-usage() { echo "usage: $0 [--resume] <dir>/<id>.brief [answer-file] [medium|high]" >&2; exit 64; }
+usage() { echo "usage: $0 [--resume] <dir>/<id>.brief [answer-file] [effort]" >&2; exit 64; }
 
 resume=0
 [[ "${1:-}" == --resume ]] && { resume=1; shift; }
@@ -57,31 +60,40 @@ finish() { printf '%s\n' "$1" > "$base.exit"; exit "$1"; }
 # This run's process, so wait-briefs.sh can tell a run that was killed (no .exit, process
 # gone) from one that is still going.
 printf '%s\n' "$$" > "$base.pid"
-bad_usage() { echo "usage: $0 [--resume] <dir>/<id>.brief [answer-file] [medium|high]" >&2; finish 64; }
+bad_usage() { echo "usage: $0 [--resume] <dir>/<id>.brief [answer-file] [effort]" >&2; finish 64; }
 
 answer=""
 if (( resume )); then answer="${2:-}"; [[ -n "$answer" && -f "$answer" ]] || bad_usage; shift; fi
-effort="${2:-medium}"
-case "$effort" in medium|high) ;; *) bad_usage ;; esac
+effort_arg="${2:-}"
+[[ -z "$effort_arg" || "$effort_arg" =~ ^[a-z][a-z-]*$ ]] || bad_usage
 [[ -n "$answer" ]] && answer=$(abs "$answer")
 root=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$root" || finish 64
 
-# Speed: RUN_BRIEF_SPEED, else CLAUDE.md's **Codex speed** setting. fast and ultrafast are
-# Codex's `priority` and `ultrafast` service tiers; base sends none. Codex accepts any tier
-# name silently, so an unknown speed is refused here.
-speed="${RUN_BRIEF_SPEED:-$(sed -n 's/^- \*\*Codex speed:\*\* `\([a-z]*\)`.*/\1/p' CLAUDE.md | head -n 1)}"
+case "$id" in
+  T-*) role=test-writer; prefix=CODEX_TEST_WRITER ;;
+  I-*) role=implementor; prefix=CODEX_IMPLEMENTOR ;;
+  *)   echo "run-brief: $id is neither a T- nor an I- brief id" >&2; finish 64 ;;
+esac
+
+# Model, effort and speed for the role, from .claude/settings.json env (CLAUDE.md, Models).
+# The brief's effort argument overrides the role's effort; Codex refuses an unknown effort.
+var() { local n="${prefix}_$1"; printf '%s' "${!n:-}"; }
+model=$(var MODEL); model="${model:-gpt-6-astra}"
+effort="${effort_arg:-$(var EFFORT)}"; effort="${effort:-medium}"
+speed=$(var SPEED); speed="${speed:-base}"
+if [[ -n "${CODEX_ALLOWED_MODELS:-}" && ",${CODEX_ALLOWED_MODELS// /}," != *",$model,"* ]]; then
+  echo "run-brief: model $model isn't allowed; CODEX_ALLOWED_MODELS (.claude/settings.json env) is $CODEX_ALLOWED_MODELS" >&2
+  finish 64
+fi
+# fast and ultrafast are Codex's `priority` and `ultrafast` service tiers (the model catalogue
+# in codex-cli 0.165.0 names `priority` "Fast"); base sends none. Codex accepts any tier name
+# silently, so an unknown speed is refused here.
 case "$speed" in
   base)      tier=() ;;
   fast)      tier=(-c service_tier=priority) ;;
   ultrafast) tier=(-c service_tier=ultrafast) ;;
-  *) echo "run-brief: Codex speed '$speed' is not base, fast or ultrafast" >&2; finish 64 ;;
-esac
-
-case "$id" in
-  T-*) role=test-writer ;;
-  I-*) role=implementor ;;
-  *)   echo "run-brief: $id is neither a T- nor an I- brief id" >&2; finish 64 ;;
+  *) echo "run-brief: ${prefix}_SPEED is '$speed', not base, fast or ultrafast" >&2; finish 64 ;;
 esac
 
 # The Write: paths, one per line. A brief written on Windows may be CRLF; a kept \r would
@@ -184,12 +196,27 @@ echo "$id: codex exited $status ($role, $effort, $speed)"
 echo "report: $shown.report"
 echo "touched ($(wc -l < "$base.touched")):"; sed 's/^/  /' "$base.touched"
 if [[ -s "$base.stray" ]]; then
-  echo "STRAY, not on Write: ($(wc -l < "$base.stray")). A path another agent holds a lock on is almost"
-  echo "certainly that agent's; check the rest with git diff."
-  while IFS= read -r p; do
-    lock=".claude/locks/${p//\//__}"
-    if [[ -f "$lock" ]]; then echo "  $p  [locked by $(cat "$lock")]"; else echo "  $p"; fi
-  done < "$base.stray"
+  echo "STRAY, not on Write: ($(wc -l < "$base.stray")). A path another agent holds a lock on, or one in"
+  echo "a sibling's territory, is almost certainly that agent's; check the rest with git diff."
+  # Each stray gets its likeliest owner: the lock holder, else the territory it lies in (this
+  # brief's workstream comes from its id, T-<workstream>-<phase>.<item>), else the reserve.
+  ws=""; [[ "${id#?-}" =~ ^(.+)-[0-9]+\.[0-9]+$ ]] && ws="${BASH_REMATCH[1]}"
+  node -e '
+    const fs = require("node:fs");
+    const [hooks, root, ws, list] = process.argv.slice(1);
+    const t = require(hooks);
+    const territories = t.load(root);
+    for (const p of fs.readFileSync(list, "utf8").split("\n").filter(Boolean)) {
+      const lock = `${root}/.claude/locks/${p.replace(/\//g, "__")}`;
+      const names = t.holders(territories, p).map((x) => x.name);
+      const why = fs.existsSync(lock) ? `locked by ${fs.readFileSync(lock, "utf8").trim()}`
+        : territories.length === 0 ? ""
+        : names.length === 0 ? "RESERVE: in no territory"
+        : ws && names.includes(ws) ? `in ${ws}'"'"'s own territory`
+        : `in ${names.join(", ")}'"'"'s territory`;
+      console.log(`  ${p}${why ? `  [${why}]` : ""}`);
+    }' "$root/.claude/hooks/territory.cjs" "$root" "$ws" "$base.stray" 2>/dev/null \
+    || sed 's/^/  /' "$base.stray"
 fi
 echo "-----"
 if [[ -s "$base.report" ]]; then cat "$base.report"; echo; else echo "(no report: read $shown.out)"; fi
