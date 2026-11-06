@@ -14,8 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-writes.sh",
-            "args": [],
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-writes.sh\"",
             "timeout": 10
           }
         ]
@@ -25,8 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-git.sh",
-            "args": [],
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-git.sh\"",
             "timeout": 10
           }
         ]
@@ -38,8 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/check-file.sh",
-            "args": [],
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.claude/hooks/check-file.sh\"",
             "timeout": 180,
             "statusMessage": "rustfmt · clippy · related tests"
           }

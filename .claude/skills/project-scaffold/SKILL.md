@@ -36,7 +36,7 @@ is only the starting point.
 | Tests that assert something | the architect's deliberate breaks at phase verification; `cargo mutants` by hand when wanted |
 | Nothing is pushed unchecked | `.githooks/pre-push`, CI `cargo xtask check` on Linux and Windows |
 | Who may write which file during the loop, territories included; post-edit lint and tests | `.claude/hooks/guard-writes.sh`, `check-file.sh` |
-| Which git commands a sub-agent may run (read-only; a nested architect also `add` and `commit` of files in its territory) | `.claude/hooks/guard-git.sh` → `git-policy.js`, `territory.js` |
+| Which git commands a sub-agent may run (read-only; a nested architect also `add` and `commit` of files in its territory) | `.claude/hooks/guard-git.sh` → `git-policy.cjs`, `territory.cjs` |
 
 ## Procedure for a new repository
 
@@ -136,15 +136,23 @@ contribution turns it back on.
   after the merge, or at the start of an effort once the owner confirms that the
   leftovers it found belong to no running effort. The guards key on `agent_id`, which only a sub-agent
   has. The main session carries an `agent_type` (from the `agent` setting) but never an
-  `agent_id`, so the orchestrator, or a solo architect, is never fenced. `territory.js` is
+  `agent_id`, so the orchestrator, or a solo architect, is never fenced. `territory.cjs` is
   the one reader of territory files. It canonicalises paths (resolving `..` and symlinks),
   and both guards use its verdict.
-- **The git guard runs on every Bash command** and denies by default. `git-policy.js`
-  tokenises the command, follows `cd` and `-C`, and refuses git hidden behind `xargs`,
-  `env`, a shell `-c` string, `$(...)` or a heredoc. It allows read-only verbs, and a nested
-  architect's `add` and `commit` only after asking git (`diff --name-only HEAD`,
-  `ls-files --others`) which files the command would touch and checking each against the
-  territory. It fences mistakes by cooperative agents. It isn't a sandbox.
+- **The git guard runs on every Bash command** and denies by default. `git-policy.cjs`
+  tokenises the command, follows `cd` and `-C`, and refuses git or gh hidden behind `xargs`,
+  `env`, a shell `-c` string, `$(...)` or a heredoc. It allows read-only git verbs and
+  read-only gh (views, lists, diffs, checks, GET-only `gh api`). A nested architect's `add`
+  and `commit` are allowed only after asking git (`diff --name-only HEAD`, the same with
+  `--cached`, `ls-files --others`) which files the command would touch and checking each
+  against the territory. Those two also refuse directories, git pathspec patterns and any
+  word bash would rewrite after the check (`$`, globs, braces, `~`), since each could take in
+  a file the check never saw. It fences mistakes by cooperative agents. It isn't a sandbox.
+- **Hooks are launched as `bash "<path>"`**, with no `args`. With `"args": []` Claude Code
+  runs the script itself instead of through a shell, which can't start a `.sh` on Windows
+  and needs the execute bit elsewhere, and a hook that fails to start doesn't block: the
+  guards silently did nothing. The node helpers are `.cjs` so a project whose `package.json`
+  says `"type": "module"` still loads them as CommonJS.
 - **Hook input is parsed with node**, not jq, because node is already required by Claude Code
   installs and jq is not present on a stock Windows machine. The hooks need `bash` and `node`
   on the PATH (Git Bash provides the first on Windows).

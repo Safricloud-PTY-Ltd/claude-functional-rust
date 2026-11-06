@@ -3,7 +3,8 @@
 #
 #   main session (no agent_id)  unrestricted: the orchestrator, or a solo architect
 #   architect (a sub-agent)     only inside the territory that names its agent id, and inside
-#                               no other territory
+#                               no other territory, or inside that territory's scratch folder
+#                               (its `scratch <dir>` line) outside the repository
 #   test-writer                 only <name>_tests.rs beside an existing <name>.rs contract, or
 #                               <crate>/tests/*.rs in a crate that has a src/lib.rs
 #   implementor                 only existing .rs files under a crate's src/ that carry an
@@ -16,7 +17,7 @@
 #                               run by hand, never from a hook)
 #
 # Territories, and the canonical repo-relative path (.. and symlinks resolved), come from
-# territory.js, which the git guard shares.
+# territory.cjs, which the git guard shares.
 #
 # Exit 2 blocks the write and hands the message to the agent as the reason.
 # Fails closed: if the input can't be parsed, the write is blocked.
@@ -29,7 +30,7 @@ norm() {
 }
 
 root=$(norm "${CLAUDE_PROJECT_DIR:-$PWD}")
-fields=$(node "$root/.claude/hooks/hook-input.js" agent_id agent_type tool_input.file_path 2>/dev/null) \
+fields=$(node "$root/.claude/hooks/hook-input.cjs" agent_id agent_type tool_input.file_path 2>/dev/null) \
   || { echo "guard-writes: could not parse hook input; write blocked" >&2; exit 2; }
 { read -r agent_id; read -r agent_type; read -r path; } <<<"$fields"
 
@@ -41,7 +42,7 @@ esac
 
 deny() { printf 'guard-writes: %s\n' "$1" >&2; exit 2; }
 
-verdict=$(node "$root/.claude/hooks/territory.js" "$agent_id" "$agent_type" "$path" 2>/dev/null) \
+verdict=$(node "$root/.claude/hooks/territory.cjs" "$agent_id" "$agent_type" "$path" 2>/dev/null) \
   || deny "could not read the territories; write blocked."
 { read -r rel; read -r why; } <<<"$verdict"
 [[ "$why" == ok ]] || deny "$why"

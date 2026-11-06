@@ -21,7 +21,7 @@ const EXCLUDED = [
 
 const HELP = `Bootstrap a project with the Claude Code functional-Rust scaffold.
 
-  npx github:Safricloud-PTY-Ltd/claude-functional-rust [directory] [--force]
+  npx --allow-git=all github:Safricloud-PTY-Ltd/claude-functional-rust [directory] [--force]
 
   directory   Where to write CLAUDE.md, CONTRIBUTING.md, AGENTS.md and .claude/. Defaults to the
               current directory.

@@ -93,8 +93,9 @@ subfolder per workstream, `<id>/<workstream>/`, with that architect's `review.md
    whole branch. It's the first moment no stubs remain anywhere. Read the full diff. Run
    `git log --stat main..` and check that each architect's commits stay inside its
    territory. If the change touches UI, look at it.
-8. **Archive.** `git mv contributions/in-progress/<id> contributions/complete/<id>` and
-   commit. This is the last commit that touches `contributions/`.
+8. **Archive.** `mkdir -p contributions/complete` (the first effort has none, and `git mv`
+   into a missing directory fails), then
+   `git mv contributions/in-progress/<id> contributions/complete/<id>` and commit. This is the last commit that touches `contributions/`.
 9. **Open the PR as a draft**, per step 9 of the architect's workflow. The body has the ask
    and its source, a section per workstream (what changed and why, what was verified), and
    **Decisions to veto**, which lists your mid-loop decisions and every architect's.
@@ -144,10 +145,15 @@ like any other effort. The effort after it starts the real work.
   # billing — contribution 2026-10-01-invoicing
   crates/billing/*
   contributions/in-progress/2026-10-01-invoicing/billing/*
+  scratch <session scratchpad>/billing
   agent <agent id>
   ```
 
-  Write the globs before the spawn. Add the `agent` line from the spawn result as soon as
+  The `scratch` line is the architect's one writable folder outside the repo, for its Codex
+  briefs and scratch builds. Give it as an absolute path, in the session scratchpad, named
+  after the workstream. The guard refuses any other shape.
+
+  Write the globs and the scratch line before the spawn. Add the `agent` line from the spawn result as soon as
   it returns. An architect denied with "no territory names architect <id>" means that line
   is missing or the id changed on a resume. Add the id it names as another `agent` line.
   Several are fine.
@@ -210,6 +216,7 @@ Workstream billing — effort 2026-10-01-invoicing, branch feat/2026-10-01-invoi
 Ask: <the workstream's part, one or two sentences, and the whole ask's source>
 Territory: .claude/territories/billing — crates/billing/*, contributions/in-progress/2026-10-01-invoicing/billing/*
 Your folder: contributions/in-progress/2026-10-01-invoicing/billing/ (review.md, plan.md)
+Scratch: <session scratchpad>/billing (your only writable folder outside the repo)
 Read first: contributions/in-progress/2026-10-01-invoicing/review.md (the split)
 Reserve done for you: <root Cargo.toml line added, dependencies, or none>
 Depends on: <workstream: its contract paths, committed or not yet>, or none

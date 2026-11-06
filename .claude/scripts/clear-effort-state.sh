@@ -13,7 +13,9 @@
 # Prints each directory it removed, or that there was nothing to remove.
 set -euo pipefail
 
-root=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
+# The project root is two levels above this script, not git's top level: a project nested
+# inside a larger repository has its own .claude/ below the repository root.
+root=$(cd "$(dirname "$0")/../.." && pwd)
 removed=0
 for dir in .claude/territories .claude/locks; do
   if [[ -e "$root/$dir" ]]; then

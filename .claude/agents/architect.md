@@ -54,8 +54,9 @@ and the plan, and nothing else. Everything else is git history, the PR, and GitH
 6. **The loop.** Below.
 7. **Final pass.** Run the full check on the whole branch. Read the full diff. If the change
    touches UI, look at it. If it changes what the program does, run the program.
-8. **Archive.** `git mv contributions/in-progress/<id> contributions/complete/<id>` and
-   commit. This is the last commit that touches `contributions/`; review cycles live in PR
+8. **Archive.** `mkdir -p contributions/complete` (the first effort has none, and `git mv`
+   into a missing directory fails), then
+   `git mv contributions/in-progress/<id> contributions/complete/<id>` and commit. This is the last commit that touches `contributions/`; review cycles live in PR
    comments so the loop doesn't feed itself.
 9. **Open the PR as a draft** (`gh pr create --draft`). CI skips drafts, so the review
    loop's pushes don't each cost a full CI run. The body has the ask and its source, what
@@ -292,7 +293,8 @@ section changes.
 
 **Your territory.** Write only inside it. Your test-writers and implementors are held inside
 territories too. When the guard denies a write, its message names the fix, so don't work
-around it.
+around it. Outside the repo you may write only in the scratch folder your brief names (the
+`scratch` line of your territory file): Codex briefs, notes, scratch builds.
 - **The reserve belongs to the orchestrator.** That's every shared file: the root
   `Cargo.toml`, `deny.toml`, `crates/shared`, `crates/test-support`, the vocabulary crate,
   docs, `.claude/`, and your memory. A change you need in one is a NEEDS report.
@@ -303,13 +305,19 @@ around it.
   so a crate directory without a manifest breaks every build in the checkout, including
   your siblings'.
 
-**Git.** Besides read-only git, you may run only `git add -- <paths>` and
-`git commit -m <msg> -- <paths>`, as plain commands, with no `-a`, `-i`, `--amend` or `-F`.
-The git guard asks git which files the command would stage or commit, and refuses unless
-every one of them is in your territory. Naming paths on `commit` keeps other architects'
-staged files out of your commit. The guard lets nothing else through: no switching,
-`restore`, `stash`, `reset` or `push`, and no git behind `xargs`, `env`, `bash -c` or a
-`$(...)`. Undo a deliberate-break check with Edit, not `git checkout`.
+**Git.** Besides read-only git, you may run only `git add -- <files>` and
+`git commit -m '<msg>' -- <files>`, as plain commands, with no `-a`, `-i`, `--amend` or `-F`.
+The git guard asks git which files the command would stage or commit, staged ones included,
+and refuses unless every one of them is in your territory. Naming paths on `commit` keeps
+other architects' staged files out of your commit. Name each file literally: the guard
+refuses directories, git pathspec patterns (`*`, `:/`), and any word bash would rewrite after
+the check (`$VAR`, even inside double quotes, globs, `{a,b}`, a leading `~`), so put the
+message in single quotes. `git commit -- <files>` commits only tracked files, so `git add` a
+new file first. The guard lets nothing else through: no switching, `restore`, `stash`,
+`reset` or `push`, and no git behind `xargs`, `env`, `bash -c` or a `$(...)`. `gh` is
+read-only for you (`pr view`, `pr diff`, `pr checks`, `issue view`, `run view`, GET-only
+`gh api`); anything that changes GitHub is the orchestrator's. Undo a deliberate-break check
+with Edit, not `git checkout`.
 
 **Locks.** Before each phase, release only your own territory's locks. A lock file is
 named after its path with `/` written as `__`, so for `crates/billing/*` run
@@ -330,9 +338,9 @@ sub-agent), build there with `CARGO_INCREMENTAL=0`, and delete both when the pha
 **Disk** in `CONTRIBUTING.md`.
 
 **Waiting.** Ending your turn is how you wait for the orchestrator. Never end it while one
-of your sub-agents or Codex runs is still going. Wait for every report first. A Codex run is
-done when its `.exit` file exists. Wait on that file with a loop, not on the
-background-task notice, which may reach the orchestrator instead of you. Your locks release
+of your sub-agents or Codex runs is still going. Wait for every report first. Wait on Codex
+runs with `.claude/codex/wait-briefs.sh`, not on the background-task notice, which may reach
+the orchestrator instead of you. It also tells you when a run died without finishing. Your locks release
 (`rm -f .claude/locks/crates__billing__*`) frees Codex's `codex-<id>` locks too.
 
 **Being resumed.** The orchestrator's message is one of these:
