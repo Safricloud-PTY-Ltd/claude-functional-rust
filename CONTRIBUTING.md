@@ -668,13 +668,15 @@ them, and the port of both into this kit.
 - **A default cap hides in every list command.** `gh project item-list` prints 30 items,
   and `gh api` lists return 30 a page. A probe with three items never shows it. Probe a
   list command against something large.
-- **Probe a new agent by spawning it, in a new session.** The agent types a session can
-  start are fixed when it starts: a designer file written mid-session was refused there as
-  "Agent type 'designer' not found" (this kit, 2026-11-10), although the TypeScript kit once
-  saw a new type appear in the running session. And the `tools:` line doesn't decide what
-  an agent gets: a designer spawned in a fresh session, in both kits, had `ArtifactData`
-  without a grant and neither `ArtifactCheck` nor `AskUserQuestion` though both were
-  granted. Ask a spawned agent for its tool list before you trust the line.
+- **Probe a new agent by spawning it, but not in the turn that wrote its file.** In the turn
+  that wrote `designer.md`, the session refused the type ("Agent type 'designer' not
+  found"). When that session's next turn began, the type was listed, and it spawned (this
+  kit, 2026-11-10). A fresh session has it too. What makes a session pick the file up was
+  not measured, so don't plan a spawn of a new type into the turn that creates it. And the
+  `tools:` line doesn't decide what an agent gets: a designer, in both kits and in a fresh
+  session and a running one alike, had `ArtifactData` without a grant and neither
+  `ArtifactCheck` nor `AskUserQuestion` though both were granted. Ask a spawned agent for
+  its tool list before you trust the line.
 - **Know what an upgrade carries.** `npx … --force` overwrites `.claude/`, `CLAUDE.md`,
   `CONTRIBUTING.md` and `AGENTS.md`. It never touches the files the scaffold installed at
   the root: `Cargo.toml`, `.config/nextest.toml`, `.cargo/`, `xtask/`, CI, the pre-push
