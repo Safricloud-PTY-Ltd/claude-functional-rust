@@ -10,7 +10,10 @@
 #   tests       the file's own tests (<name>::tests::, or the tests/<name>.rs target).
 #               Skipped for stubs (red by design), lib.rs / mod.rs / types.rs (everything
 #               uses them), and for the test-writer (its tests are meant to be red; it runs
-#               them itself). Uses cargo-nextest when installed, cargo test otherwise.
+#               them itself). Skipped too for a slow or perf test (<name>_slow_tests.rs,
+#               <name>_perf_tests.rs, tests/<name>_slow.rs, tests/<name>_perf.rs): each runs by
+#               name under its own nextest profile, when a brief names that command, never on
+#               every edit. Uses cargo-nextest when installed, cargo test otherwise.
 #
 # Parallel agents share one target/ directory, so cargo serialises them on its build lock.
 # That is slower than it could be and always correct. Not a policy hook, so it fails open.
@@ -28,15 +31,20 @@ fields=$(node "$root/.claude/hooks/hook-input.cjs" tool_input.file_path agent_id
 case "$path" in *.rs) ;; *) exit 0 ;; esac
 # No workspace yet (the scaffold isn't installed), so there's nothing to lint or test.
 [[ -f "$root/Cargo.toml" ]] || exit 0
-path=$(norm "$path")
-[[ -f "$path" ]] || exit 0
-rel="${path#"$root"/}"
 cd "$root" || exit 0
+# The repo-relative path, forward slashes, from territory.cjs, which resolves real paths on both
+# sides before it compares them. A prefix strip is not enough: the project directory and the
+# file can arrive in different spellings of one path (on Windows a short name,
+# C:\Users\SOMEON~1, against the long one), the strip then matches nothing, and the clippy
+# filter below would hide every error from the agent that made it. Empty outside the project.
+rel=$(node -e 'const { repoRelative } = require(process.argv[1]); process.stdout.write(repoRelative(process.argv[2], process.argv[3]) ?? "")' \
+  "$root/.claude/hooks/territory.cjs" "$root" "$path" 2>/dev/null) || exit 0
+[[ -n "$rel" && -f "$rel" ]] || exit 0
 
 # The crate is the nearest ancestor with a Cargo.toml that isn't the workspace root.
-dir=$(dirname "$path")
-while [[ "$dir" != "$root" && "$dir" != "/" && ! -f "$dir/Cargo.toml" ]]; do dir=$(dirname "$dir"); done
-[[ "$dir" == "$root" || ! -f "$dir/Cargo.toml" ]] && exit 0
+dir=$(dirname "$rel")
+while [[ "$dir" != "." && ! -f "$dir/Cargo.toml" ]]; do dir=$(dirname "$dir"); done
+[[ "$dir" == "." ]] && exit 0
 pkg=$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$dir/Cargo.toml" | head -n 1)
 [[ -n "$pkg" ]] || exit 0
 
@@ -45,7 +53,7 @@ failed=0
 section() { report+="== $1"$'\n'"$2"$'\n'; failed=1; }
 
 # 1. Format
-if ! out=$(rustfmt --check --edition 2024 -- "$path" 2>&1); then
+if ! out=$(rustfmt --check --edition 2024 -- "$rel" 2>&1); then
   section "rustfmt --check (run: rustfmt --edition 2024 $rel)" "$(head -n 60 <<<"$out")"
 fi
 
@@ -60,12 +68,16 @@ fi
 filter=()
 stem=$(basename "$rel" .rs)
 case "$rel" in
+  # A slow or perf test: no run. Ahead of the arms below on purpose. Under cargo test, which
+  # has no profiles, `--test api_slow` would run the whole slow binary on every edit; under
+  # nextest the default profile would collect nothing and --no-tests=pass would call that a pass.
+  */tests/*_slow.rs|*/tests/*_perf.rs|*_slow_tests.rs|*_perf_tests.rs) ;;
   */tests/*.rs)                    filter=(--test "$stem") ;;
   */lib.rs|*/mod.rs|*/types.rs|*/main.rs) ;;
   *_tests.rs)                      filter=(-- "${stem%_tests}::tests::") ;;
   *)                               filter=(-- "${stem}::tests::") ;;
 esac
-grep -q '@stub' "$path" && filter=()
+grep -q '@stub' "$rel" && filter=()
 [[ "$agent_type" == test-writer ]] && filter=()
 
 if (( ${#filter[@]} )) && (( ! failed )); then

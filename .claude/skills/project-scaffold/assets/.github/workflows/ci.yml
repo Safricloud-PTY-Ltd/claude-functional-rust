@@ -51,7 +51,13 @@ jobs:
       # The floor rises with the codebase; it never falls. main.rs files and test files are
       # excluded. Adapter crates count: glue that only a running program exercises is checked
       # by running it, and the workspace has to stay above the floor with it included.
+      #
+      # The `ci` nextest profile is the normal and the slow suite together, so this step is
+      # where the slow tests (<name>_slow_tests.rs, tests/<name>_slow.rs) run: `cargo xtask
+      # check` and the pre-push hook leave them out, and code only a slow test reaches still
+      # counts toward the floor. The perf suite (`--profile perf`) depends on the machine and
+      # is run by hand only; don't add it here.
       - run: >
-          cargo llvm-cov nextest --workspace
+          cargo llvm-cov nextest --workspace --profile ci
           --ignore-filename-regex '(main\.rs|_tests\.rs|[\/]tests[\/])'
           --fail-under-lines 90

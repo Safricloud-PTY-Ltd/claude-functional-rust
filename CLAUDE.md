@@ -39,6 +39,17 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
   most three at once per architect, and a Claude sub-agent takes a brief when Codex fails it
   twice or runs out of usage. How to brief, run, check and resume a Codex run: **Delegating a
   brief to Codex** in `CONTRIBUTING.md`.
+- **Project:** `yes` | `no` — `yes`: the main session (the orchestrator, or a solo
+  architect) keeps one GitHub Project for this repository and tracks every effort on it:
+  the effort as an issue, its workstreams as sub-issues of that, its tasks as sub-issues of
+  a workstream, each moved through Todo, In Progress and Done. It finds the project linked
+  to the repository, or creates and links one on the first effort; `gh` needs the `project`
+  scope (`gh auth refresh -s project`, which only the owner can run). Future work goes on
+  the board as an issue at Todo, added by the owner or at the owner's request. Turning it
+  on tracks efforts from then on: an open issue joins the board when an effort adopts it
+  or the owner adds it. `no`: no board, and none of that runs; issues are still created and
+  labelled. A line still showing both options means `no`. How each step is done: **The
+  project board** in `CONTRIBUTING.md`.
 - **Models:** model, effort and speed per role, in `.claude/settings.json` `env`. A machine
   overrides them in `.claude/settings.local.json`; restart Claude Code after a change.
   - Codex test-writer and implementor briefs: `CODEX_TEST_WRITER_MODEL`, `_EFFORT`, `_SPEED`
@@ -53,7 +64,8 @@ cargo-nextest, proptest, clippy, cargo-deny. Default branch: `main`.
     Codex takes an unknown tier silently, so the scripts refuse any other word.
 
 With auto-merge on and no reviewer, the loop runs from the ask to the deploy with one stop:
-the questions.
+the questions. An ask with UI in it has two more before that, both the designer's: its
+questions, and the pick between its three designs.
 
 ## Commands
 
@@ -64,9 +76,19 @@ the questions.
   (`codex login status` should say "Logged in using ChatGPT")
 - Check (format + lint + tests + doc tests + supply chain + unused deps + no stubs + crate
   purity): `cargo xtask check`
-- One crate's tests: `cargo nextest run -p <crate>`
+- One crate's tests (the normal suite): `cargo nextest run -p <crate>`
+- Slow tests (`<name>_slow_tests.rs`, `tests/<name>_slow.rs`: they wait on the real clock or
+  are long by nature; CI runs them inside coverage, never `cargo xtask check` or the
+  pre-push hook): `cargo nextest run --workspace --profile slow`
+- Perf tests (`<name>_perf_tests.rs`, `tests/<name>_perf.rs`: they assert on elapsed time or
+  growth; by hand only, never check, pre-push or CI):
+  `cargo nextest run --workspace --profile perf`
+- One slow or perf test, by name:
+  `cargo nextest run -p <crate> --profile slow <fn_name>::slow_tests::`
 - Build: `cargo build --release`
-- Coverage: `cargo llvm-cov nextest --workspace`
+- Coverage (the normal and slow suites; CI runs it with a floor):
+  `cargo llvm-cov nextest --workspace --profile ci`
+- The hooks' own tests: `node --test ".claude/hooks/*.test.cjs"`
 - Deploy: `<how it deploys, and how to see whether it worked; or "none: a contribution is
   finished when it is merged and main is green">`
 
@@ -75,7 +97,7 @@ effort installs it: the `project-scaffold` skill.
 
 ## Who does what
 
-Four agents, defined in `.claude/agents/`:
+Five agents, defined in `.claude/agents/`:
 
 - **orchestrator** is the main session by default (`claude`; the `agent` setting in
   `.claude/settings.json`). It splits the ask into workstreams and draws each one a
@@ -83,9 +105,17 @@ Four agents, defined in `.claude/agents/`:
   writes. It spawns one architect per workstream in waves, and edits the shared files that
   are in no territory (the root `Cargo.toml` and the like) itself. It routes one
   architect's request for a change in another's territory, owns the branch, and does the
-  full check, the PR, review and merge. When the owner has a choice to make, it asks with
+  full check, the PR, review and merge, and keeps the project board when the **Project**
+  setting is `yes`. When the owner has a choice to make, it asks with
   `AskUserQuestion`, one round per wave, options with the recommendation first, never a
-  list to answer by typing.
+  list to answer by typing. An issue that waits on a person is labelled
+  `blocked-on-product-owner` (a product decision), `blocked-on-dev-owner` (a code, hosting
+  or architecture decision, or something only that person can do), or both.
+- **designer** works before the plan on any ask that adds or reshapes something a user
+  sees. It asks questions that narrow the direction, publishes three options as shareable
+  Artifact pages, and writes up the one the owner picks as a spec. It writes only in the
+  effort's `design/` folder, never product code. The main session spawns it and carries its
+  questions and the pick to the owner; `claude --agent designer` runs one alone.
 - **architect** owns the shape of the code in its workstream. It restates the ask, reviews,
   plans, writes every contract, dispatches the other two a phase at a time, verifies and
   commits. Under the orchestrator it reports questions and needs instead of asking the
@@ -111,7 +141,7 @@ The full workflows live in the agent files.
 
 ## Voice
 
-Every text block begins with the writer's name: `Orchestrator:`, `Architect:` (or
+Every text block begins with the writer's name: `Orchestrator:`, `Designer:`, `Architect:` (or
 `Architect billing:` for the architect of workstream `billing`), or for a sub-agent the brief
 it holds — `T-2.3:` or `I-2.3:` for item 3 of phase 2, `T-billing-2.3:` under a workstream.
 Before each tool call, one prefixed line saying what you're about to do and why —
@@ -142,8 +172,8 @@ branch once its PR has merged (expected — do it as part of the merge).
 
 ## Code
 
-The `code-standards` skill is the rulebook and is preloaded into every agent. In four
-lines: small pure functions with one job, one concept per file, named after its export.
+The `code-standards` skill is the rulebook and is preloaded into every agent that plans or
+writes code. In four lines: small pure functions with one job, one concept per file, named after its export.
 Every named function is a contract the architect wrote first. Failures are `Result`
 values, never panics. A module is a crate; I/O lives in adapter crates behind ports so core
 crates can be tested by calling them.
@@ -157,11 +187,14 @@ crates can be tested by calling them.
   rules the Claude Code hooks enforce, since no hook runs for Codex. Change it when a hook's
   rule changes.
 - **GitHub issues** are the ledger — deferred work, follow-ups, anything that needs tracking.
+  With the **Project** setting at `yes`, the repository's GitHub Project is the view over
+  them: what is in flight, what is Todo, and what waits on whom.
 - **`CONTRIBUTING.md`** holds how pull requests are reviewed (requesting a Codex or Claude
-  review, doing one, answering one), how to delegate a brief to Codex, how to keep `target/`
-  in check, and the repo's gotchas.
+  review, doing one, answering one), how to delegate a brief to Codex, how the project
+  board is kept, how to keep `target/` in check, and the repo's gotchas.
   Read it before you start a contribution and before you open a PR.
-- **`contributions/`** holds the review and plan for each piece of work, found by its slug.
+- **`contributions/`** holds the review and plan for each piece of work, found by its slug,
+  and its `design/` folder when a designer worked on it.
 - **`.claude/agent-memory/architect/`** is the architect's own notes on the codebase:
   where things live, generalisations already made, gotchas. Not status, not decisions.
   **`.claude/agent-memory/orchestrator/`** is the orchestrator's, about splits and waves.

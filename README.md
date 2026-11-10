@@ -2,7 +2,7 @@
 
 A scaffold for building functional Rust with Claude Code, delivered by one command.
 
-It is not a library and not an application. It is the harness: four agents, a set of write
+It is not a library and not an application. It is the harness: five agents, a set of write
 and git guards, two skills, and a validated Cargo workspace. Together they turn Claude Code
 into a team that writes contracts first, tests second and implementations last. The codebase
 it produces has one crate per swappable module, failures as `Result` values, and I/O kept in
@@ -56,13 +56,13 @@ Requirements:
 
 ```
 CLAUDE.md                     your project's instructions to Claude — fill in the placeholders
-CONTRIBUTING.md               PR review (codex or claude, off by default), Codex briefs, target/ hygiene, gotchas
+CONTRIBUTING.md               PR review (codex or claude, off by default), Codex briefs, the project board, target/ hygiene, gotchas
 AGENTS.md                     Codex's entry point, as brief runner or reviewer, and the hook rules it keeps itself
 .claude/
   settings.json               registers the hooks and makes the orchestrator the default agent
-  agents/                     orchestrator, architect, test-writer, implementor
+  agents/                     orchestrator, designer, architect, test-writer, implementor
   codex/run-brief.sh          runs a test-writer or implementor brief on Codex (Brief runner: codex, off by default)
-  hooks/                      write guard, git guard, territories, post-edit rustfmt/clippy/tests
+  hooks/                      write guard, git and gh guard, territories, post-edit rustfmt/clippy/tests, and their tests
   skills/
     code-standards/           the rulebook: how every crate, function, error and test is written
     project-scaffold/         the toolchain, plus the workspace it installs, in assets/
@@ -73,14 +73,21 @@ Nothing else is copied. The scaffold's own working files (this README, `bin/`,
 
 ## How the workflow works
 
-Four agents, defined in [.claude/agents/](.claude/agents/), with a deliberate split: two
-decide, two write.
+Five agents, defined in [.claude/agents/](.claude/agents/), with a deliberate split: one
+coordinates, one designs what a user sees, one shapes the code per workstream, two write.
 
 - **orchestrator** is the session you talk to (`claude`). It splits an ask into
   workstreams and draws each one a **territory**, a set of files no other agent may write.
   It spawns one architect per workstream in waves, keeps the shared files itself (the root
   `Cargo.toml`, `Cargo.lock`, CI, docs), asks you each wave's questions in one round, routes
-  requests between architects, and owns the branch, the PR, review and merge.
+  requests between architects, and owns the branch, the PR, review and merge. With the
+  **Project** setting on, it also keeps a GitHub Project for the repo: each effort is an
+  issue, its workstreams are sub-issues, their tasks are sub-issues of those, and an issue
+  that waits on a person is labelled `blocked-on-product-owner` or `blocked-on-dev-owner`.
+- **designer** works before any plan when the ask adds or reshapes something a user sees.
+  It asks you questions that narrow the direction, publishes three options as shareable
+  pages with Claude Code's Artifact tool, and writes up the one you pick as a spec for the
+  architect. It writes no product code.
 - **architect** owns the shape of the code in its workstream. It writes a review and a plan,
   then a **contract** for every function before any of them exist: a signature, its rustdoc
   and a `stub!` body. It dispatches the other two, verifies what comes back, and commits.
@@ -108,9 +115,9 @@ Hooks in [.claude/hooks/](.claude/hooks/) enforce what prose can't:
 
 - **Write guard.** An architect writes only inside its territory. A test-writer writes only
   `<fn>_tests.rs` beside an existing contract, or `tests/*.rs`. An implementor edits only
-  files carrying an `@stub` marker, and creates none. Every file has at most one owner per
-  phase.
-- **Git guard.** Sub-agents get read-only git. A nested architect may also `git add` and
+  files carrying an `@stub` marker, and creates none. A designer writes only inside its
+  effort's `design/` folder. Every file has at most one owner per phase.
+- **Git guard.** Sub-agents get read-only git and read-only `gh`. A nested architect may also `git add` and
   `git commit` explicit paths, but only after the guard has asked git which files the command
   would touch and checked each one against the architect's territory.
 - **Post-edit check.** After every edit of a `.rs` file: rustfmt on the file, clippy on its
@@ -134,6 +141,11 @@ version:
   by the consumer; tests use fakes, never mocks.
 - Every named function is a contract written first, with `# Parameters`, `# Returns`,
   `# Errors` and `# Remarks` in its rustdoc.
+- Tests come in three suites, told apart by file name. The normal suite (`<fn>_tests.rs`)
+  runs in `cargo xtask check`, the pre-push hook and CI. Tests that wait on the real clock
+  or are long by nature are slow tests (`<fn>_slow_tests.rs`), which only CI runs. Tests
+  that assert on elapsed time or growth are perf tests (`<fn>_perf_tests.rs`), which run by
+  hand only, so a test that depends on the machine can never refuse a push.
 
 Every one of those that a tool can check is checked by a tool: rustc, clippy (the workspace
 lint table and `clippy.toml`), rustfmt, cargo-deny, cargo-machete, or `cargo xtask check`.
@@ -159,6 +171,13 @@ project. A few things follow from that:
 - **`assets/` is a complete workspace.** To validate a change to it, copy it into an empty
   git repository, rename the two files, commit, and run `cargo xtask check`. Then re-run the
   five negative cases in the skill's **Versions** section. Don't build inside `assets/`.
+  A change to `assets/` reaches only new projects: say what an installed one copies by
+  hand, under **Upgrading an installed project** in the skill.
+- **The hooks have tests, run with node's own runner**, from any shell:
+  `node --test ".claude/hooks/*.test.cjs"`. They ship with the hooks, so a project that
+  adapts a hook can run them too. In this repo the write guard keeps test-writers and
+  implementors out of `assets/`, so a Rust change there is made by an architect in a
+  scratch install, without the loop.
 
 To test a change to the command before it's on `main`, install from the branch:
 

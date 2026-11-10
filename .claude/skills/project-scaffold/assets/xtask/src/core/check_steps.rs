@@ -1,5 +1,19 @@
 use crate::types::{CommandLine, Expectation, Step};
 
+/// Step 3's *filter*: the normal suite, as the table on [`check_steps`] spells it.
+const NORMAL_SUITE_FILTER: &str = "not (test(/(^|::)(slow|perf)_tests::/) | (kind(test) & binary(/_(slow|perf)$|^xtask$/) & not binary(=xtask)))";
+
+/// Step 3's arguments, as the table on [`check_steps`] spells them.
+const TEST_ARGS: [&str; 7] = [
+    "nextest",
+    "run",
+    "--workspace",
+    "--no-tests=pass",
+    "--ignore-default-filter",
+    "-E",
+    NORMAL_SUITE_FILTER,
+];
+
 /// Step 7's arguments, as the table on [`check_steps`] spells them.
 const NO_STUBS_ARGS: [&str; 9] = [
     "grep",
@@ -24,12 +38,29 @@ const NO_STUBS_ARGS: [&str; 9] = [
 /// | - | :-- | :-- | :-- |
 /// | 1 | `fmt` | `fmt` `--all` `--check` | `ExitZero` |
 /// | 2 | `clippy` | `clippy` `--workspace` `--all-targets` `--` `-D` `warnings` | `ExitZero` |
-/// | 3 | `test` | `nextest` `run` `--workspace` `--no-tests=pass` | `ExitZero` |
+/// | 3 | `test` | `nextest` `run` `--workspace` `--no-tests=pass` `--ignore-default-filter` `-E` *filter* | `ExitZero` |
 /// | 4 | `doctest` | `test` `--workspace` `--doc` | `ExitZero` |
 /// | 5 | `deny` | `deny` `check` | `ExitZero` |
 /// | 6 | `machete` | *(none: the argument vector is empty)* | `ExitZero` |
 /// | 7 | `no-stubs` | `grep` `--untracked` `-n` `-E` *pattern* `--` `*.rs` `:!crates/shared` `:!.claude` | `NoMatches` |
 /// | 8 | `purity` | `metadata` `--format-version` `1` `--no-deps` | `PureCoreCrates` |
+///
+/// The *filter* of step 3 is the nextest filter set that selects the normal suite,
+/// `not (test(/(^|::)(slow|perf)_tests::/) | (kind(test) & binary(/_(slow|perf)$|^xtask$/) & not binary(=xtask)))`:
+/// every test except those in a `slow_tests` or `perf_tests` module and those in an integration
+/// test binary whose name ends in `_slow` or `_perf` (code-standards, Tests). It is the
+/// `default-filter` of `[profile.default]` in `.config/nextest.toml`, character for character.
+///
+/// Why `^xtask$` is in the `binary()` and then taken out again: nextest refuses a `binary()`
+/// matcher that matches no binary in the workspace, and `-E` is checked like the config. A
+/// workspace with no `tests/<name>_slow.rs` or `tests/<name>_perf.rs` yet would fail the step
+/// on `binary(/_(slow|perf)$/)` alone. `xtask` is the one binary this workspace always has, so
+/// it keeps the matcher non-empty, and `not binary(=xtask)` removes it from the result.
+///
+/// `--ignore-default-filter` switches the config's `default-filter` off, so the step's
+/// selection is exactly the normal suite whatever the config says: `-E` alone would be
+/// intersected with the config's filter, and a narrower one would shrink the gate without a
+/// word.
 ///
 /// The *pattern* of step 7 is the POSIX extended regular expression
 /// `^[[:space:]]*stub!\(` (caret, the bracket expression `[[:space:]]`, star, the letters
@@ -61,13 +92,12 @@ pub fn check_steps() -> Vec<Step> {
         "-D",
         "warnings",
     ];
-    let test_args: &[&str] = &["nextest", "run", "--workspace", "--no-tests=pass"];
     let purity_args: &[&str] = &["metadata", "--format-version", "1", "--no-deps"];
 
     let table: [(&str, &str, &[&str], Expectation); 8] = [
         ("fmt", "cargo", &["fmt", "--all", "--check"], zero),
         ("clippy", "cargo", clippy_args, zero),
-        ("test", "cargo", test_args, zero),
+        ("test", "cargo", &TEST_ARGS, zero),
         ("doctest", "cargo", &["test", "--workspace", "--doc"], zero),
         ("deny", "cargo", &["deny", "check"], zero),
         ("machete", "cargo-machete", &[], zero),

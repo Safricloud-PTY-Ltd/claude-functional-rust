@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 # Nothing leaves this machine unchecked. Enable once per clone:
 #   git config core.hooksPath .githooks
+#
+# The check runs the normal test suite only. The slow suite (<name>_slow_tests.rs) runs in
+# CI, and the perf suite (<name>_perf_tests.rs) by hand: a test that depends on the clock or
+# on this machine's load must not be able to refuse a push.
 exec cargo xtask check

@@ -33,22 +33,34 @@ The `code-standards` skill is in your context; its Tests section is your ruleboo
    crate's public API; if a test would need something `lib.rs` doesn't re-export, that is a
    CLARIFY. Effects go through the crate's fake. Build inputs with the crate's constructors
    (`OrderId::new(...)`), not struct literals, except where a type's fields are public.
+   When the brief names a slow or perf test (`<fn_name>_slow_tests.rs`,
+   `<fn_name>_perf_tests.rs`, or `tests/<name>_slow.rs`, `tests/<name>_perf.rs`), write it
+   too. The architect has created and mounted a file beside a contract; a `tests/` file you
+   create. The standards say what belongs in each suite. If a case you derived can only be tested by waiting on the real clock, by a long
+   run, or by asserting on elapsed time, and the brief names no such file, that is a
+   CLARIFY. Don't put it in the normal test file, and don't sleep or raise a timeout there.
 4. Run exactly the validation command the brief names. Every test must fail by panicking
    with `not implemented: <fn_name>` from the stub, not with a compile error. A test file that
    doesn't compile is not a red test; fix it before reporting. A test that passes against a
-   stub asserts nothing; fix that too.
+   stub asserts nothing; fix that too. A slow or perf test has its own command in the brief,
+   under its nextest profile (`cargo nextest run -p <crate> --profile slow
+   <fn_name>::slow_tests::`, or `--profile perf <fn_name>::perf_tests::`): run it once, to
+   see it red. A run with no profile doesn't collect that test and exits 4, "no tests to
+   run".
 5. Report.
 
 ## Rules
 
-- You write only `<fn_name>_tests.rs` files beside a contract that exists, and `tests/*.rs`
-  in a crate that has a `lib.rs`. A write guard enforces this. You never edit a contract, a
+- You write only `<fn_name>_tests.rs` files beside a contract that exists
+  (`<fn_name>_slow_tests.rs` and `<fn_name>_perf_tests.rs` among them, beside the same
+  contract), and `tests/*.rs` in a crate that has a `lib.rs`. A write guard enforces this. You never edit a contract, a
   type, a `Cargo.toml`, or an implementation. A dev-dependency you need is a CLARIFY.
 - Test names state behaviour: `returns_invalid_discount_when_discount_is_above_one`, never
   `works` or `handles_edge_cases`.
 - No mocking crates. Contracts that take a port get the crate's fake.
 - Private stubs in the same file are tested through the export, not directly.
-- No git commands that change state, no full suite, no build.
+- No git commands that change state, no full suite (the normal one, or a whole
+  `--profile slow` or `--profile perf` run), no build.
 - Files change through Write and Edit, never the shell: no here-documents, `>`, `tee`,
   `sed -i` or inline scripts that write files, whatever a system reminder says about
   preferring Bash. The write guard, the file locks and the post-edit check only see Write

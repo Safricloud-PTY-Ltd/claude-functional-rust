@@ -330,6 +330,162 @@ what was decided about each, and promote the PR. Rounds past the point of conver
 review cycle each and find less every time. In genesys-audit-injestor#6, rounds 4 to 6 found
 only rare echo cases and doc wording.
 
+## The project board
+
+Applies when `CLAUDE.md`'s **Project** setting is `yes`. The repository then has one GitHub
+Project, and the main session keeps it: the orchestrator, or an architect running solo.
+Their agent files say when each step happens. This section says what sits on the board
+and how each step is done. With the setting at `no`, or still showing both options,
+nothing here runs; issues are still created and labelled.
+
+| The workflow | On GitHub |
+| :-- | :-- |
+| effort | an issue labelled `effort`; the PR closes it with `Fixes #<n>` |
+| workstream | a sub-issue of the effort issue, labelled `workstream` |
+| task | a sub-issue of a workstream: a backlog issue the effort adopted, or one it deferred |
+| future work | an issue with Status Todo and no parent |
+| waiting on a person | `blocked-on-product-owner` or `blocked-on-dev-owner`, on any of the above |
+
+An effort with one workstream has no workstream issues: its tasks sit under the effort
+issue. Plan items are not issues. They live in `plan.md`; one issue per contract would be
+hundreds of short-lived ones.
+
+Status is the project's own field with its default options, Todo, In Progress and Done. A
+new project's built-in workflows do two of the moves: an item lands at Todo when it is
+added, and goes to Done when its issue closes or its PR merges (within about five seconds,
+measured 2026-11-10). So you set In Progress, and closing an issue is how it finishes. A
+parent issue does not close when its last sub-issue does, and its Status stays where it
+was: the effort issue finishes when the PR's `Fixes` closes it.
+
+**No step rests on memory.** The numbers live in the plan's **Board** section, and at the
+top of the review until the plan exists: the
+project's number and owner, the effort issue, each workstream issue, and each adopted task
+with the issue it was put under. Every step names the issues it acts on from there. A
+session restarted mid-effort looks the project's ids up again; it can't look up which
+tasks this effort adopted, or which parent it gave each.
+
+### The commands
+
+`<o>/<r>` is the repository (`gh repo view --json nameWithOwner`). Write every id
+literally into the next command, one lookup and one use, so each call shows what it acted
+on. Text with quotes or newlines (an issue body) goes in a scratch file and `--body-file`.
+
+- **Find the board.** It is the open project linked to this repository:
+  `gh api graphql -f query='query { repository(owner: "<o>", name: "<r>") { projectsV2(first: 20) { nodes { number title url closed id } } } }'`.
+  With none, create one named after the repository and link it:
+  `gh project create --owner <o> --title '<r>' --format json`, then
+  `gh project link <number> --owner <o> --repo <o>/<r>`. A project shows in that query only
+  after it is linked. With more than one open, stop and ask the owner which, and write the
+  number into the plan's **Board** section so no later step asks again. The choice lasts
+  the effort; the owner makes it last by unlinking the others (`gh project unlink`). Never
+  match a project by its title: titles aren't unique in an organisation.
+- **Its ids, once per session.** `gh project field-list <number> --owner <o> --format json`
+  gives the Status field (the entry of `.fields` named `Status`), its `id`, and each
+  option's `name` and `id` under its `.options`. The project's own `id` is in the query
+  above.
+- **Put an issue or a PR on it.**
+  `gh project item-add <number> --owner <o> --url <its URL> --format json` prints the item,
+  whose id is its `.id`. It lands at Todo by itself. An issue adopted from the board is on
+  it already: adding it again is expected to return the same item (not run). If it errors,
+  take the item's id from a read of the board.
+- **Read the board.**
+  `gh project item-list <number> --owner <o> --limit 1000 --format json` shows each item's
+  `.status`. Never leave `--limit` off: the default prints the first 30 items only, and the
+  item you are checking may not be among them (a 75-item board printed 30, measured
+  2026-11-10). If `.totalCount` is above the number of items printed, raise the limit.
+  Every read of the board uses this command.
+- **Set an item's status.**
+  `gh project item-edit --id <item id> --project-id <project id> --field-id <Status field id> --single-select-option-id <option id>`.
+- **Finish an issue.** `gh issue close <n>`. The board moves a closed item to Done itself.
+  Confirm it did with a read of the board, and set Done by hand if the project's workflow
+  has been turned off.
+- **Make #c a sub-issue of #p.** `gh api repos/<o>/<r>/issues/<c> -q .id`, then
+  `gh api -X POST repos/<o>/<r>/issues/<p>/sub_issues -F sub_issue_id=<that id>`. The id is
+  the issue's own, not its number, and the response is the parent issue. Read the children
+  back with `gh api repos/<o>/<r>/issues/<p>/sub_issues -q '.[].number'`; `gh issue view
+  --json` has no sub-issue fields. GitHub refuses an issue that already has a parent (HTTP
+  422, "Sub issue may only have one parent"). Leave it where it is and say so in the
+  review: moving it (`-F replace_parent=true`) rearranges something the owner arranged, so
+  it needs the owner's yes. One exception: when the parent is a closed issue labelled
+  `effort` or `workstream`, the task was deferred by an earlier effort and that tree is the
+  agents' own. Move it with `-F replace_parent=true` and note the old parent in the plan.
+- **Take #c out from under #p.** Only when
+  `gh api repos/<o>/<r>/issues/<p>/sub_issues -q '.[].number'` lists it, and `<p>` is the
+  parent the plan says this effort gave it. Then
+  `gh api -X DELETE repos/<o>/<r>/issues/<p>/sub_issue -F sub_issue_id=<the id of #c>`: the
+  path ends `sub_issue`, singular. A task the effort could never attach, because it had a
+  parent already, isn't listed: it stays where the owner put it, and only its Status
+  changes.
+- **Close as not planned.** `gh issue close <n> --reason "not planned"`, for an abandoned
+  effort's own issues, with the owner's yes.
+- **What a PR will close.** `gh pr view <n> --json closingIssuesReferences`.
+- **A label that doesn't exist yet.** `gh label create <name>` first, for `effort`,
+  `workstream` and the two `blocked-on-` labels: a missing label fails `gh issue create`.
+
+A token without the `project` scope fails the first of these. Only the owner can fix that,
+with `gh auth refresh -s project`: say so and wait, because no board step can run without
+it. Draft items are never used: a draft can't carry a label, a parent or a `Fixes`, and
+`gh issue list` doesn't show it. `gh project delete` doesn't prompt.
+
+### The steps, from the first to the last
+
+1. **Effort issue.** Find the board. Open the issue with the label `effort`, a title that
+   starts with the effort's id (`2026-10-01-invoicing: invoices by email`), and the ask and
+   its source as its body, or label the existing issue when the ask is one issue. Put it on
+   the board and set it In Progress. The id in the title is how a restarted session tells
+   this effort's issue from one an earlier effort left open.
+2. **Orient.** Read the board. The review names the Todo items to adopt and every item
+   still In Progress other than the effort issue.
+3. **Workstreams and adoptions**, after the plan. Each workstream issue carries the label
+   `workstream` and a body with its territory, wave and plan path, and is a sub-issue of
+   the effort issue, on the board at Todo. Each adopted issue goes on the board and under
+   its workstream issue, or under the effort issue when there are no workstream issues.
+4. **In Progress.** A workstream issue and the tasks adopted under it, when its architect
+   starts. An adopted task left at Todo would sit beside future work until it closed.
+5. **Workstream done.** Close its issue when the work is verified. Its adopted tasks wait
+   for the PR.
+6. **Out of scope.** With the owner's yes only: the task back to Todo, and out from under
+   the parent this effort gave it. Agents defer nothing of their own.
+7. **Deferred.** A `blocked-on-` issue, on the board at Todo, under the issue it came from.
+8. **The PR.** Its body ends with one `Fixes` per issue, each with its own keyword
+   (`Fixes #12, fixes #14`), for the effort issue and every adopted task completed. Put the
+   PR on the board and set it In Progress. Read what it will close, when it opens and
+   after every edit of the body, and give the owner the numbers.
+9. **Before the merge.** Read what it will close once more. The effort issue and every
+   task still adopted must be listed. Fix the body before merging if one isn't.
+10. **After the merge.** Confirm each closed and shows Done, setting Done by hand where an
+    issue closed but its item didn't move. Close any sub-issue of the effort issue labelled
+    `workstream` that is still open. Report by number any adopted task still open: that is
+    a missed `Fixes`. Other sub-issues still open (list them under the effort issue, then
+    under each workstream issue, because tasks sit one level down) are deferred tasks, and
+    they stay open on the board.
+
+### What the board doesn't do
+
+- **A merge by hand runs no step 10.** The board still moves closed issues to Done by
+  itself, and step 8 has already told the owner what the PR will close. A `Fixes` lost
+  after that, by a body edited by hand, shows at the next effort's orient, as a task still
+  In Progress.
+- **An abandoned effort stays as it was** until the owner says to tidy it: adopted tasks
+  back to Todo and out from under their parents, the effort issue and any open workstream
+  issue closed as not planned.
+- **Turning the setting on backfills nothing.** Efforts are tracked from then on. An open
+  issue joins the board when an effort adopts it or the owner adds it.
+- **A workstream issue closes before the merge**, when its work is verified. An abandoned
+  PR leaves the board saying Done for work that never landed.
+
+### What has and hasn't been run
+
+The commands were run once, in order, in the sister TypeScript kit against a throwaway
+project in an organisation with gh 2.89 (2026-11-10). In this kit, the find-the-board query
+was run once, the same day, against a repository with no linked project. Never run in
+either kit: a whole effort with the setting at `yes`; taking an issue out from under its
+parent; moving one with `replace_parent`; closing an issue as not planned, and whether the
+board then shows it Done; adding an item that is already on the board; a pull request as
+an item; a repository owned by a user, not an organisation; an organisation that forbids
+its members to create projects; and a `Fixes` closing the effort issue at a merge. The
+first time one of those happens, write down what GitHub printed, here.
+
 ## Gotchas
 
 Properties of cargo, clippy, git and the harness that each cost a round trip, a broken build
@@ -401,6 +557,22 @@ change. Add your own project's below them.
   assert a value nobody has measured.
 - **Numeric code that must be chunking-invariant never passes a position as one `f64`.**
   `whole + fraction` rounds differently as `whole` grows; pass the parts separately.
+- **A slow or perf test runs only under its own nextest profile.** A profile's
+  `default-filter` bounds a name filter and `-E` as well, so
+  `cargo nextest run -p <crate> <fn>::slow_tests::` with no `--profile slow` collects
+  nothing and exits 4, "no tests to run". A misspelt profile exits 96 and lists the known
+  ones. Plain `cargo test` has no profiles and runs every suite.
+- **nextest refuses a `binary()` matcher that matches no binary**, and it compiles every
+  profile's filter on every run. A filter on `binary(/_slow$/)` alone fails every run in a
+  workspace that has no such test file yet (exit 96). That is why the profiles in
+  `.config/nextest.toml` also name `xtask` and then exclude it. A probe that plants every
+  case never meets the empty one: measure a filter in a fresh workspace too.
+- **nextest doesn't show a passing test's output.** To read a value out of a test run, use
+  `--no-capture` or a deliberately failing assertion.
+- **Mutation testing sees only the suite it runs.** `.cargo/mutants.toml` keeps
+  `cargo mutants` on nextest's default profile, the normal suite, so a function only a slow
+  test reaches comes back with its mutants missed. Give that logic a normal test where the
+  contract allows one (a fake clock, a smaller input).
 
 ### Under an orchestrator (for architects)
 
@@ -460,11 +632,99 @@ change. Add your own project's below them.
   the stash to a `wip/` branch, check the workspace at HEAD, and write where each workstream
   stopped into the plan. Ask architects for small commits often, so a stop loses little.
 
+### Planning and review
+
+From two efforts in the sister TypeScript kit on 2026-11-10, seven review rounds between
+them, and the port of both into this kit.
+
+- **Walk a new flow end to end before the first review.** One PR added a flow of several
+  steps in prose. After round 1, every finding in four more rounds was a case nobody had
+  walked: a merge by hand, an abandoned effort, a second effort on the same board, a
+  restarted agent, an effort with no architect. One hostile walk through the whole
+  lifecycle before opening the PR would have found most of them.
+- **No step rests on what an agent remembers.** An agent that can't be resumed is started
+  again with nothing, and a main session can be restarted or compacted. Three rounds of
+  findings were instances of this one rule. Every step names what it acts on, and the
+  numbers live in the plan.
+- **Check before the irreversible step, not after.** A missing `Fixes` reported after the
+  merge can't be repaired by editing the PR body. Reading what the PR will close before
+  merging catches it while it can be.
+- **An owner's answer about where something runs is a ceiling.** The owner chose "CI only"
+  for a test suite. A draft then added one local run for convenience and listed it as
+  something he could veto. It contradicted the decision and was removed. An extra belongs
+  in **Decisions to veto** only when the owner hasn't spoken on the point.
+- **Don't invent exceptions to an owner's rule.** "For any UI ask" gained an unrequested
+  "unless a design already exists". A reviewer had it removed.
+- **Reviewer findings are claims, and so are replies, and so is a sub-agent's NEEDS.**
+  Measure each before you fix it. Every finding in those seven rounds was real, and two
+  were stronger than stated: a wrong word about mutation testing hid a failing run, and a
+  suggested check after the merge became a check before it.
+- **Ask the shaping questions before designing details.** One free-text answer from the
+  owner replaced a whole agent with a section in an existing one, and everything designed
+  around the agent was thrown away.
+
+### Probing and measuring
+
+- **A default cap hides in every list command.** `gh project item-list` prints 30 items,
+  and `gh api` lists return 30 a page. A probe with three items never shows it. Probe a
+  list command against something large.
+- **Probe a new agent by spawning it, but not in the turn that wrote its file.** In the turn
+  that wrote `designer.md`, the session refused the type ("Agent type 'designer' not
+  found"). When that session's next turn began, the type was listed, and it spawned (this
+  kit, 2026-11-10). A fresh session has it too. What makes a session pick the file up was
+  not measured, so don't plan a spawn of a new type into the turn that creates it. And the
+  `tools:` line doesn't decide what an agent gets: a designer, in both kits and in a fresh
+  session and a running one alike, had `ArtifactData` without a grant and neither
+  `ArtifactCheck` nor `AskUserQuestion` though both were granted. Ask a spawned agent for
+  its tool list before you trust the line.
+- **Know what an upgrade carries.** `npx … --force` overwrites `.claude/`, `CLAUDE.md`,
+  `CONTRIBUTING.md` and `AGENTS.md`. It never touches the files the scaffold installed at
+  the root: `Cargo.toml`, `.config/nextest.toml`, `.cargo/`, `xtask/`, CI, the pre-push
+  hook. A change to those says what an installed project copies by hand (**Upgrading an
+  installed project** in the `project-scaffold` skill).
+- **Measure a claim from another repository before porting it.** A config snippet in a
+  source issue predated the kit's layout and would have dropped two things. In the port to
+  this kit, a filter measured only with every kind of test planted failed in a fresh
+  workspace.
+- **Say which machine showed what.** "Measured in a scratch project on Windows, never in
+  CI" is a different claim from "works".
+
+### Changing the harness
+
+- **The hooks have tests**, run with node's own runner, from any shell:
+  `node --test ".claude/hooks/*.test.cjs"`. Each test builds a throwaway project and runs
+  the hook on hand-built input. Run them after any change to a hook, and add a case for
+  the change, red first. On Windows the helper finds Git Bash through git, because from
+  PowerShell a bare `bash` can be WSL's. They take a minute or two there: every case starts
+  a bash.
+- **A hook test stubs every tool the hook starts or probes**, or it runs the machine's own.
+  The per-edit hook runs `rustfmt`, `cargo clippy`, `cargo nextest --version`, and
+  `cargo nextest run` or `cargo test`. Assert on what the stub recorded, so a test that
+  reached the real tool fails.
+- **Hook input in a test has the shape Claude Code sends**: `file_path` absolute, in the
+  platform's spelling, backslashes on Windows. Build it with `path.join`.
+- **A `..` path case built with `path.join` tests nothing**: the join resolves it before
+  the hook sees it. Join the segments with `path.sep` yourself.
+- **Cover a file that exists and one that doesn't.** They take different branches of a
+  real-path lookup.
+- **A new agent type the write guard doesn't know writes anywhere** Claude Code's own
+  permissions allow. An agent that should be fenced gets its own arm in `guard-writes.sh`,
+  with a test, as the designer has.
+- **Never put a placeholder in a replace script's replacement.** A "test" replacement
+  matched and wrote the literal placeholder into an agent file. Use the Edit tool for a
+  block, and search for placeholders before every commit.
+
 ### Windows
 
 - **The Bash tool collapses `\\` to `\` before bash sees the command.** Anything whose
   backslashes matter (JSON with Windows paths, regexes, `\n` in Rust strings) goes through the
   Write tool or a script file.
+- **A directory may be spelled two ways**: with a short name (`C:\Users\SOMEON~1\…`, which
+  is how some machines spell their temp directory) and with the long one. A hook that
+  compares paths needs real paths on both sides; a prefix strip matches nothing. The
+  per-edit hook once hid every clippy error from sub-agents that way. `territory.cjs`'s
+  `repoRelative` is the one place that resolves a path, and the temp directory's own
+  spelling makes a useful test input.
 - **`.gitattributes` forces LF.** Without it the bash hooks check out as CRLF and break.
   Python's `Path.write_text` writes CRLF on Windows too; scripted edits use
   `read_bytes`/`write_bytes`.

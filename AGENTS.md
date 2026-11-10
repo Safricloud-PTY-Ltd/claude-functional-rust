@@ -64,9 +64,15 @@ tree and undoes anything outside your brief, so a stray edit only costs a round 
   file, no notes, no new module, no helper. If you need another file changed, put it in
   your report.
 - **Test-writer:** you may write only a `<name>_tests.rs` beside an existing `<name>.rs`
-  contract, or a `crates/<crate>/tests/*.rs` in a crate that has a `src/lib.rs`. You never
-  edit a contract, a type, `lib.rs`, `mod.rs` or a `Cargo.toml`. A dev-dependency you need
-  is a CLARIFY.
+  contract, or a `crates/<crate>/tests/*.rs` in a crate that has a `src/lib.rs`. A slow or
+  perf test, `<name>_slow_tests.rs` or `<name>_perf_tests.rs`, sits beside the same
+  `<name>.rs`. You never edit a contract, a type, `lib.rs`, `mod.rs` or a `Cargo.toml`. A
+  dev-dependency you need is a CLARIFY.
+- **A slow or perf test runs by name, under its nextest profile,** with the command your
+  brief gives (`cargo nextest run -p <crate> --profile slow <name>::slow_tests::`, or
+  `--profile perf <name>::perf_tests::`). Run it once: a test-writer to see it red, an
+  implementor once the body is written. A run with no profile doesn't collect it. Never
+  run a whole suite under either profile.
 - **Implementor:** you may write only the existing files on your `Write:` line, the ones
   that carry (or carried, before your edit removed it) a `// @stub` tagged with your item
   number. You may keep editing such a file to fix its clippy findings once the marker is

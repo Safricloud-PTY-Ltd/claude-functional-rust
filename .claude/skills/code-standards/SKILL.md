@@ -32,6 +32,8 @@ crates/
       types.rs             the crate's types, error kinds, and their constructors
       <fn_name>.rs         one primary `pub fn`, named after the file
       <fn_name>_tests.rs   its contract tests, colocated; owned by the test-writer
+      <fn_name>_slow_tests.rs, <fn_name>_perf_tests.rs
+                           its slow and perf tests, when it has any (see Tests)
       <concept>/mod.rs     a sub-module when a concept needs several files; same rules inside
     tests/
       api.rs               black-box test through the public API: what a replacement must pass
@@ -45,6 +47,9 @@ xtask/                     kind tool: `cargo xtask check`
   `app`, `tool` (enforced).
 - A file is named after its primary export: `line_total.rs` exports `line_total`.
   `snake_case.rs` always. A type that needs its own file is named after the type, snake-cased.
+  No contract's name ends in `_slow` or `_perf`: those suffixes name test suites, and the
+  hooks strip them to find the contract, so the tests of a `go_slow.rs` would be looked for
+  beside a `go.rs` and never run on an edit.
 - One primary `pub fn` per file. A private helper may live in the same file when the
   architect puts it there; it is still a contract, with a doc comment and a `@stub` marker.
   Until its caller has a body it is dead code, so its stub carries a temporary
@@ -232,6 +237,21 @@ mod tests;
   implementation (enforced).
 - The architect creates the `_tests.rs` file alongside the contract (a one-line `//!` header is
   enough) because the `#[path]` line doesn't compile without it. The test-writer fills it.
+- A contract with a slow or perf test (see Tests) mounts that file the same way, under a
+  fixed module name, which is what the nextest profiles select on:
+
+  ```rust
+  #[cfg(test)]
+  #[path = "line_total_slow_tests.rs"]
+  mod slow_tests;
+
+  #[cfg(test)]
+  #[path = "line_total_perf_tests.rs"]
+  mod perf_tests;
+  ```
+
+  The architect writes those lines and creates the files, with the same `#[allow]` as
+  `mod tests` where a test is long.
 - Implementors change the body and nothing else: not the signature, the doc comment, the
   `mod tests` lines, or the tests, and they add no functions. The one exception is imports: an
   implementor may add the names its body uses to the file's top-level `use` lines (never a
@@ -255,8 +275,9 @@ mod tests;
 
 ## Tests
 
-- One `<fn_name>_tests.rs` per contract, colocated, attached by the contract's `#[path]` line.
-  It imports what it tests by name, `use super::line_total;`, never `use super::*;`.
+- One normal test file per contract, `<fn_name>_tests.rs`, colocated, attached by the
+  contract's `#[path]` line. It imports what it tests by name, `use super::line_total;`,
+  never `use super::*;`. Beside it may sit a slow or a perf sibling (the suites, below).
 - One `tests/api.rs` per crate, exercising the public API as a caller would. Ports are
   exercised through the crate's fake, never a mock.
 - Tests are written from the contract, not the implementation. The test-writer reads the
@@ -281,7 +302,39 @@ mod tests;
   crate's `#[cfg(test)] mod testing` instead. The same goes for the vocabulary crate's
   colocated tests: `test-support` depends on it, so they would see a second copy of its
   types. Shared fakes of the ports (a scripted source that replays given values), constant
-  tables, and builders for fixture bytes all live in `test-support`.
+  tables, and builders for fixture bytes all live in `test-support`. The same answer holds
+  for a test and its slow or perf sibling: the helper both need lives in `test-support`,
+  or in the crate's `mod testing` when it works over private types. They are files of one
+  crate, so both can see either.
+- **Three suites, told apart by where a test lives.** A test goes in the suite its pass
+  depends on:
+  - **normal**: `<fn_name>_tests.rs` (`mod tests`) and `tests/*.rs`. The result is the same
+    on any machine at any load. A test that drives time through a fake clock or an injected
+    sleep belongs here. It runs in a plain `cargo nextest run`, and so in
+    `cargo xtask check`, the pre-push hook and CI.
+  - **slow**: `<fn_name>_slow_tests.rs` (`mod slow_tests`) and `tests/<name>_slow.rs`. The
+    assertion is about behaviour, but the test waits on the real clock or is long by nature
+    (real sleeps and timers, thousands of records, a spawned process per test).
+    `cargo nextest run --profile slow` runs it; CI runs it inside its coverage job. Never
+    `cargo xtask check` or pre-push.
+  - **perf**: `<fn_name>_perf_tests.rs` (`mod perf_tests`) and `tests/<name>_perf.rs`. The
+    assertion itself is about elapsed time or a growth rate ("under 50 ms", "linear in n"),
+    so the result depends on the machine. `cargo nextest run --profile perf` runs it, by
+    hand only: never check, pre-push or CI.
+
+  Prefer a fake clock to a slow test where the contract allows one: the clock is a port
+  (see Adapters and dependencies). Never sleep, or wait out a real timeout, to keep a test
+  in the normal suite: a test that needs to is a slow test. Logic a slow test exercises
+  also gets a normal test where the contract allows one (a fake clock, a smaller input),
+  because mutation testing runs the normal suite only.
+- **A new or changed slow or perf test is run by name, red and then green**, with the
+  command its brief names: `cargo nextest run -p <crate> --profile slow
+  <fn_name>::slow_tests::` (or `--profile perf <fn_name>::perf_tests::`; for a black-box
+  one, `--profile slow --test <name>_slow`). The test-writer runs it against the stub, the
+  implementor against the body, and the architect once more at phase verification. That is
+  the whole of its place in the loop. The per-edit hook doesn't run it, a run with no
+  profile doesn't collect it, and nobody runs the perf suite unasked. Moving a test into a
+  suite is a move, not a verification.
 - A test's name states the behaviour: `returns_invalid_discount_when_discount_is_above_one`.
   Names like `works` or `handles_edge_case` are rejected in review.
 - `unwrap`/`expect`/indexing/`panic!` are allowed in tests; that is how a test fails. The
@@ -316,5 +369,7 @@ Before reporting a file done, check it against this list; the architect will.
       crate-owned data is opaque; nothing outside `lib.rs`'s re-exports is `pub`.
 - [ ] Tests cover every `# Parameters` edge case and every `# Errors` kind; parsers have a
       never-panics property; no mocks.
+- [ ] No test in the normal suite sleeps, waits on the real clock or asserts on elapsed
+      time; such a test is in the slow or perf file, mounted as `slow_tests` or `perf_tests`.
 - [ ] `cargo clippy -p <crate> --all-targets -- -D warnings`, `cargo fmt --check`, and the
       file's tests pass; nothing outside the brief was touched.

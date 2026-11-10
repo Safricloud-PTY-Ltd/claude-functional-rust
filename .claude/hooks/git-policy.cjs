@@ -5,7 +5,8 @@
 //   main session (no agent_id)  anything
 //   every sub-agent             read-only git verbs (READ_ONLY below), `git -C <dir>` and
 //                               `--no-pager` only as global options; read-only gh (GH_READ
-//                               below, and `gh api` GET requests with no body)
+//                               below, `gh api` GET requests with no body, and help on any
+//                               built-in command)
 //   architect (a sub-agent)     also `git add` and `git commit`, with explicit file paths, when
 //                               every file git reports the command would stage or commit lies
 //                               in the architect's own territory and in no other
@@ -37,8 +38,17 @@ const GH_READ = {
   repo: ['view'],
   label: ['list'],
   auth: ['status'],
+  project: ['list', 'view', 'item-list', 'field-list'],
 };
 const GH_ANY = new Set(['help', '--help', '-h', 'version', '--version', 'status', 'search']);
+// gh's own commands (gh 2.89). A help flag is honoured under these only: an alias or an
+// extension is handed its arguments as they are, so `gh <alias> --help` can run anything.
+const GH_BUILTIN = new Set(['agent-task', 'alias', 'api', 'attestation', 'auth', 'browse', 'cache',
+  'codespace', 'completion', 'config', 'copilot', 'extension', 'gist', 'gpg-key', 'issue', 'label',
+  'licenses', 'org', 'pr', 'preview', 'project', 'release', 'repo', 'ruleset', 'run', 'search',
+  'secret', 'ssh-key', 'status', 'variable', 'workflow']);
+// Where gh gives -h a value of its own (a hostname, a host, a homepage), so it is not help.
+const GH_SHORT_H_TAKEN = new Set(['auth', 'config', 'repo']);
 
 const isGit = (w) => /(^|[\\/])git(\.exe)?$/i.test(w);
 const isGh = (w) => /(^|[\\/])gh(\.exe)?$/i.test(w);
@@ -253,13 +263,25 @@ function checkGhApi(args) {
   }
 }
 
+// Whether the command only asks a built-in command for its help: `gh issue --help`,
+// `gh issue create --help`. Once the flag is set gh prints help and runs nothing, whatever
+// follows it (measured, gh 2.89: `gh label list --help --limit 1` printed help). So the help flag
+// must be the first flag: one in front of it could take `--help` as its own value, as in
+// `gh issue create --title --help`.
+function asksForHelp(args) {
+  const first = args.findIndex((a) => a.startsWith('-'));
+  if (first < 1 || !GH_BUILTIN.has(args[0])) return false;
+  return args[first] === '--help' || (args[first] === '-h' && !GH_SHORT_H_TAKEN.has(args[0]));
+}
+
 function checkGh(inv) {
   const [sub, verb] = inv.args;
   if (sub === undefined || GH_ANY.has(sub)) return;
+  if (asksForHelp(inv.args)) return;
   if (sub === 'api') { checkGhApi(inv.args.slice(1)); return; }
   if (GH_READ[sub]?.includes(verb)) return;
   const reads = Object.entries(GH_READ).map(([s, vs]) => `${s} ${vs.join('|')}`).join(', ');
-  refuse(`\`gh ${[sub, verb].filter(Boolean).join(' ')}\` is not allowed here. Sub-agents run read-only gh: ${reads}, search, and \`gh api\` GET requests. Anything that changes GitHub is the orchestrator's; ask for it in your report.`);
+  refuse(`\`gh ${[sub, verb].filter(Boolean).join(' ')}\` is not allowed here. Sub-agents run read-only gh: ${reads}, search, \`gh api\` GET requests, and \`--help\` as the first flag of any built-in command. Anything that changes GitHub is the orchestrator's; ask for it in your report.`);
 }
 
 function decide(input) {

@@ -1,4 +1,35 @@
+# Three test suites, told apart by where a test lives (code-standards, Tests):
+#
+#   normal  every test not named below. The default profile: a plain `cargo nextest run`, and
+#           so `cargo xtask check`, the pre-push hook and CI's check job.
+#   slow    `<name>_slow_tests.rs` (mounted as `mod slow_tests`) and `tests/<name>_slow.rs`:
+#           behaviour tests that wait on the real clock or are long by nature.
+#           `--profile slow`. CI runs them in its coverage job, with `--profile ci`.
+#   perf    `<name>_perf_tests.rs` (mounted as `mod perf_tests`) and `tests/<name>_perf.rs`:
+#           assertions on elapsed time or growth, which depend on the machine.
+#           `--profile perf`, by hand only: never check, pre-push or CI.
+#
+# A profile's default-filter also bounds a name filter and `-E`, so a slow or perf test runs
+# by name only under its own profile. `cargo xtask check` passes the default profile's filter
+# itself as well, and an xtask test holds the two equal: change one and change the other.
+#
+# Why `^xtask$` is in every binary() and then taken out again: nextest refuses a binary()
+# matcher that matches no binary in the workspace, and it compiles every profile's filter on
+# every run. A workspace with no `tests/<name>_slow.rs` yet would fail every nextest run on
+# `binary(/_slow$/)` alone. `xtask` is the one binary this workspace always has, so it keeps
+# the matcher non-empty, and `not binary(=xtask)` removes it from the result.
 [profile.default]
 fail-fast = false
 status-level = "fail"
 final-status-level = "fail"
+default-filter = "not (test(/(^|::)(slow|perf)_tests::/) | (kind(test) & binary(/_(slow|perf)$|^xtask$/) & not binary(=xtask)))"
+
+[profile.slow]
+default-filter = "test(/(^|::)slow_tests::/) | (kind(test) & binary(/_slow$|^xtask$/) & not binary(=xtask))"
+
+[profile.perf]
+default-filter = "test(/(^|::)perf_tests::/) | (kind(test) & binary(/_perf$|^xtask$/) & not binary(=xtask))"
+
+# The normal and slow suites together: everything but perf. CI's coverage job.
+[profile.ci]
+default-filter = "not (test(/(^|::)perf_tests::/) | (kind(test) & binary(/_perf$|^xtask$/) & not binary(=xtask)))"

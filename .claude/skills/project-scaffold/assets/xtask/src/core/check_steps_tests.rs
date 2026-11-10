@@ -1,6 +1,8 @@
 //! Contract tests for `check_steps`.
 
 use std::collections::BTreeSet;
+use std::fs;
+use std::path::Path;
 
 use super::check_steps;
 use crate::types::{CommandLine, Expectation, Step};
@@ -86,20 +88,84 @@ fn second_step_runs_clippy_over_all_targets_denying_warnings() {
 }
 
 #[test]
-fn third_step_runs_the_workspace_tests_with_nextest() {
+fn third_step_runs_only_the_normal_suite_with_nextest_whatever_the_config_says() {
     assert_eq!(
         check_steps()[2],
         Step {
             name: "test".to_owned(),
             command_line: CommandLine {
                 program: "cargo".to_owned(),
-                args: ["nextest", "run", "--workspace", "--no-tests=pass"]
-                    .map(String::from)
-                    .to_vec(),
+                args: [
+                    "nextest",
+                    "run",
+                    "--workspace",
+                    "--no-tests=pass",
+                    "--ignore-default-filter",
+                    "-E",
+                    NORMAL_SUITE,
+                ]
+                .map(String::from)
+                .to_vec(),
             },
             expectation: Expectation::ExitZero,
         }
     );
+}
+
+#[test]
+fn third_step_filter_equals_the_default_profile_filter_in_the_nextest_config() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../.config/nextest.toml");
+    let config = fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+    let step = &check_steps()[2];
+
+    assert_eq!(
+        default_profile_filter(&config).as_deref(),
+        step.command_line.args.last().map(String::as_str),
+        "step 3's filter and [profile.default] default-filter in {} have drifted apart",
+        path.display()
+    );
+}
+
+#[test]
+fn reads_the_default_profile_filter_and_not_another_profiles() {
+    let config = concat!(
+        "[profile.slow]\n",
+        "default-filter = \"test(/slow/)\"\n",
+        "\n",
+        "[profile.default]\n",
+        "fail-fast = false\n",
+        "default-filter = \"not test(/slow/)\"\n",
+        "\n",
+        "[profile.ci]\n",
+        "default-filter = \"all()\"\n",
+    );
+    assert_eq!(
+        default_profile_filter(config).as_deref(),
+        Some("not test(/slow/)")
+    );
+    assert_eq!(default_profile_filter("[profile.default]\n"), None);
+}
+
+/// The normal suite's filter set, as code-standards' Tests section names the suites.
+const NORMAL_SUITE: &str = "not (test(/(^|::)(slow|perf)_tests::/) | (kind(test) & binary(/_(slow|perf)$|^xtask$/) & not binary(=xtask)))";
+
+/// The value of `default-filter` in the `[profile.default]` table of a nextest config, or
+/// `None` when that table has no such key. Reads a one-line basic string with no escapes,
+/// which is how the scaffold writes it; anything else is `None`, so the drift test fails
+/// rather than compares a half-read value.
+fn default_profile_filter(config: &str) -> Option<String> {
+    let mut in_default = false;
+    config.lines().map(str::trim).find_map(|line| {
+        if line.starts_with('[') {
+            in_default = line == "[profile.default]";
+            return None;
+        }
+        let value = line.strip_prefix("default-filter")?.trim_start();
+        let quoted = value.strip_prefix('=')?.trim();
+        let inner = quoted.strip_prefix('"')?.strip_suffix('"')?;
+        (in_default && !inner.contains(['"', '\\'])).then(|| inner.to_owned())
+    })
 }
 
 #[test]
