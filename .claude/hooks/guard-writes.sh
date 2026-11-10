@@ -6,11 +6,17 @@
 #                               no other territory, or inside that territory's scratch folder
 #                               (its `scratch <dir>` line) outside the repository
 #   test-writer                 only <name>_tests.rs beside an existing <name>.rs contract, or
-#                               <crate>/tests/*.rs in a crate that has a src/lib.rs
+#                               <crate>/tests/*.rs in a crate that has a src/lib.rs. A slow or
+#                               perf test (<name>_slow_tests.rs, <name>_perf_tests.rs) sits
+#                               beside the same contract, <name>.rs
 #   implementor                 only existing .rs files under a crate's src/ that carry an
 #                               @stub marker, or a file it already holds; never tests, never
 #                               new files, never Cargo.toml
 #   test-writer, implementor    also inside exactly one territory, whenever any territory exists
+#   designer                    only inside contributions/in-progress/<id>/design/; never product
+#                               code, and nothing outside the repository. Any effort's design
+#                               folder passes: one effort is live at a time, and the guard isn't
+#                               told which
 #   any file                    at most one sub-agent owner per phase (.claude/locks; an
 #                               architect releases its own territory's locks before each
 #                               phase; .claude/scripts/clear-effort-state.sh clears them all,
@@ -36,11 +42,23 @@ fields=$(node "$root/.claude/hooks/hook-input.cjs" agent_id agent_type tool_inpu
 
 [[ -z "$agent_id" || -z "$path" ]] && exit 0
 case "$agent_type" in
-  architect|implementor|test-writer) ;;
+  architect|implementor|test-writer|designer) ;;
   *) exit 0 ;;   # Explore and other sub-agents follow the normal permission flow
 esac
 
 deny() { printf 'guard-writes: %s\n' "$1" >&2; exit 2; }
+
+if [[ "$agent_type" == designer ]]; then
+  # territory.cjs gives the canonical repo-relative path (.. and symlinks resolved, empty
+  # outside the repository). Territories themselves don't fence a designer: its folder is in
+  # the reserve.
+  verdict=$(node "$root/.claude/hooks/territory.cjs" "$agent_id" "$agent_type" "$path" 2>/dev/null) \
+    || deny "could not resolve the path; write blocked."
+  { read -r rel; } <<<"$verdict"
+  [[ "$rel" =~ ^contributions/in-progress/[^/]+/design/ ]] \
+    || deny "the designer writes only inside contributions/in-progress/<id>/design/ (asked for ${rel:-$path}). Product code, tokens and components are the architect's, built from your spec; put what you need changed in your report."
+  exit 0
+fi
 
 verdict=$(node "$root/.claude/hooks/territory.cjs" "$agent_id" "$agent_type" "$path" 2>/dev/null) \
   || deny "could not read the territories; write blocked."
@@ -69,7 +87,11 @@ if [[ "$agent_type" == test-writer ]]; then
   case "$inner" in
     tests/*/*) deny "test-writer writes tests/*.rs, not files below it (asked for $rel). Fixtures are the architect's." ;;
     tests/*)   [[ -f "$root/$crate/src/lib.rs" ]] || deny "no src/lib.rs in $crate, so there is no public API to test yet." ;;
-    *)         contract="${rel%_tests.rs}.rs"
+    *)         # line_total_slow_tests.rs and line_total_perf_tests.rs test line_total.rs, so
+               # strip the suite after the test suffix. No contract's own name ends in _slow
+               # or _perf: those name suites.
+               base="${rel%_tests.rs}"; base="${base%_slow}"; base="${base%_perf}"
+               contract="$base.rs"
                [[ -f "$root/$contract" ]] || deny "no contract at $contract for $rel. Tests go beside an existing contract; report CLARIFY if the brief points elsewhere." ;;
   esac
 else
