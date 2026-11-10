@@ -672,8 +672,9 @@ them, and the port of both into this kit.
   start are fixed when it starts: a designer file written mid-session was refused there as
   "Agent type 'designer' not found" (this kit, 2026-11-10), although the TypeScript kit once
   saw a new type appear in the running session. And the `tools:` line doesn't decide what
-  an agent gets: in that kit a designer's real tool list differed from its line in three
-  places. Ask a spawned agent for its tool list before you trust the line.
+  an agent gets: a designer spawned in a fresh session, in both kits, had `ArtifactData`
+  without a grant and neither `ArtifactCheck` nor `AskUserQuestion` though both were
+  granted. Ask a spawned agent for its tool list before you trust the line.
 - **Know what an upgrade carries.** `npx … --force` overwrites `.claude/`, `CLAUDE.md`,
   `CONTRIBUTING.md` and `AGENTS.md`. It never touches the files the scaffold installed at
   the root: `Cargo.toml`, `.config/nextest.toml`, `.cargo/`, `xtask/`, CI, the pre-push

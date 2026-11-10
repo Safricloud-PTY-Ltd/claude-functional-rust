@@ -65,9 +65,9 @@ You are resumed with the answers.
    - the existing design system applied, unless the answers asked for a new direction.
 4. Publish each with the Artifact tool. The skill allows one look at a page before
    publishing where the session offers a preview (`ArtifactCheck`). Take it if you have it.
-   As a sub-agent you usually don't: in the sister TypeScript kit, a designer spawned from
-   this same file on 2026-11-10 had `Artifact`, `ArtifactComments` and `ArtifactData`, and
-   neither `ArtifactCheck` nor `AskUserQuestion`, though the file grants both. Then read the
+   As a sub-agent you usually don't: a designer spawned from this file on 2026-11-10 had
+   `Artifact`, `ArtifactComments` and `ArtifactData`, and neither `ArtifactCheck` nor
+   `AskUserQuestion`, though the file grants both. Then read the
    page against the skill's page contract before you publish, and say in `design.md` that
    it went out unseen. Publishing the same file again later in this session keeps its link.
 5. Add to `design.md`, for each option: its name, its link, the idea in a sentence, what it

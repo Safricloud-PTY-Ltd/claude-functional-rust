@@ -272,6 +272,9 @@ Not measured: Linux, and the CI workflow itself. Without a nextest config, nexte
 fail-fast default returns, so a failing run of the `test` step stops at its first failure.
 
 The hooks have had their own tests since 2026-11-10 (`.claude/hooks/*.test.cjs`, 48 cases).
+In projects bootstrapped from the branch they passed on Windows 11 (48 of 48, from Git Bash
+and from PowerShell, and with WSL's `bash` first on `PATH`) and in a Debian `node:24`
+container (44, with the four Windows-only cases skipped).
 Writing them reproduced a fault on Windows: with the project directory spelled with a
 short name and the file with the long one, the per-edit hook hid the edited file's clippy
 errors from the sub-agent that made them.

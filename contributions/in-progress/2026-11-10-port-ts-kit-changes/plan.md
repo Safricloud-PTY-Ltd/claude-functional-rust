@@ -91,7 +91,10 @@ All 2026-11-10.
 6. **A new agent type is not spawnable in the session that writes its file.** Measured: this
    session refused `designer` ("Agent type 'designer' not found"). The TypeScript kit's
    lesson said the opposite of its own session. `CONTRIBUTING.md` records both, and the
-   designer was probed in a fresh session in a bootstrapped project instead.
+   designer was probed in a fresh headless session in a bootstrapped project instead: it
+   spawned, its tools were `Read, Write, Edit, Grep, Glob, Skill, WebFetch, WebSearch,
+   Artifact, ArtifactComments, ArtifactData`, a write in its design folder succeeded, and a
+   write at the project root was refused with the guard's message.
 7. **The effort issue's title starts with the effort's id.** Not in the TypeScript text.
    Walking the board's flow showed that a restarted session, before any plan exists, could
    not tell its effort issue from one an abandoned effort left open.
