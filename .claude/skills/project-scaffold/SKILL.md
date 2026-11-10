@@ -32,11 +32,13 @@ is only the starting point.
 | Licences, advisories, yanked crates, unknown registries | `cargo deny check` (`deny.toml`) |
 | No stub reaches `main` | `cargo xtask check`, step `no-stubs` |
 | Tests red before green; properties | `cargo nextest`, `proptest`; the loop itself |
-| Line coverage floor | CI job `coverage`: `cargo llvm-cov nextest --fail-under-lines` |
-| Tests that assert something | the architect's deliberate breaks at phase verification; `cargo mutants` by hand when wanted |
+| A test that depends on the clock or the machine can't refuse a push: slow tests run in CI only, perf tests by hand only | the profiles in `.config/nextest.toml` (`default`, `slow`, `perf`, `ci`); the `test` step of `cargo xtask check`, which passes the normal suite's filter itself |
+| Line coverage floor, over the normal and slow suites | CI job `coverage`: `cargo llvm-cov nextest --profile ci --fail-under-lines` |
+| Tests that assert something | the architect's deliberate breaks at phase verification; `cargo mutants` by hand when wanted (`.cargo/mutants.toml` keeps it on the normal suite) |
 | Nothing is pushed unchecked | `.githooks/pre-push`, CI `cargo xtask check` on Linux and Windows |
-| Who may write which file during the loop, territories included; post-edit lint and tests | `.claude/hooks/guard-writes.sh`, `check-file.sh` |
-| Which git commands a sub-agent may run (read-only; a nested architect also `add` and `commit` of files in its territory) | `.claude/hooks/guard-git.sh` → `git-policy.cjs`, `territory.cjs` |
+| Who may write which file during the loop, territories and the designer's folder included; post-edit lint and tests | `.claude/hooks/guard-writes.sh`, `check-file.sh` |
+| Which git and gh commands a sub-agent may run (read-only; a nested architect also `add` and `commit` of files in its territory) | `.claude/hooks/guard-git.sh` → `git-policy.cjs`, `territory.cjs` |
+| The hooks do what this table says | `node --test ".claude/hooks/*.test.cjs"`, by hand after any change to a hook |
 
 ## Procedure for a new repository
 
@@ -119,6 +121,31 @@ contribution turns it back on.
 - **Coverage is not in `cargo xtask check`.** It rebuilds the workspace with instrumentation,
   so it runs in CI only, and the loop stays fast. There is no nightly workflow; mutation
   testing is the architects' deliberate breaks, and `cargo mutants` by hand.
+- **Three test suites, chosen by nextest profile.** `.config/nextest.toml` gives each profile
+  a `default-filter`. With no profile a run is the normal suite: every test that isn't in a
+  `slow_tests` or `perf_tests` module or in a `tests/<name>_slow.rs` or `tests/<name>_perf.rs`
+  binary. `--profile slow` and `--profile perf` run one suite each, and `--profile ci` the
+  normal and slow suites together.
+  - `cargo xtask check` (and so pre-push and CI's check job) is the normal suite. Its `test`
+    step passes the default profile's filter itself, so the gate holds in a workspace whose
+    nextest config is missing or edited, and an xtask test holds the two expressions equal.
+  - CI's coverage job runs `--profile ci`. That is where the slow suite runs, once, and it
+    lets code only a slow test reaches count toward the floor.
+  - No hook and no workflow runs `--profile perf`.
+  - A wrong selection is loud. A misspelt profile exits 96 and lists the known ones, and a
+    slow test named with no profile exits 4, "no tests to run". Nothing falls back to the
+    normal suite in silence.
+  - Plain `cargo test` has no profiles and runs every suite. The kit runs tests through
+    nextest everywhere. The per-edit hook, which falls back to `cargo test` on a machine
+    without nextest, skips slow and perf files by name for that reason.
+  - Every `binary()` in the filters also names `xtask` and then excludes it. nextest refuses
+    a `binary()` that matches no binary, and compiles every profile's filter on every run,
+    so without that a workspace with no slow integration test yet fails every run.
+  - Mutation testing stays on the normal suite (`.cargo/mutants.toml`, `test_tool =
+    "nextest"`). cargo-mutants' own default is `cargo test`, which runs all three.
+- **A designer's folder needs no ignore line.** Nothing in `cargo xtask check` reads
+  `contributions/`: `cargo fmt` and clippy take the workspace's crates, and the stub search
+  takes `*.rs`.
 - **CI runs once per PR.** PRs stay drafts through their review loop, and `ci.yml` skips
   drafts and triggers on `ready_for_review`.
 - **Hooks normalise paths.** Claude Code on Windows reports `C:\...` paths and cargo prints
@@ -142,7 +169,9 @@ contribution turns it back on.
 - **The git guard runs on every Bash command** and denies by default. `git-policy.cjs`
   tokenises the command, follows `cd` and `-C`, and refuses git or gh hidden behind `xargs`,
   `env`, a shell `-c` string, `$(...)` or a heredoc. It allows read-only git verbs and
-  read-only gh (views, lists, diffs, checks, GET-only `gh api`). A nested architect's `add`
+  read-only gh (views, lists, diffs, checks, a project board's lists, GET-only `gh api`, and
+  `--help` as the first flag of a built-in command; `-h` too, except under `auth`, `config`
+  and `repo`, where gh gives it a value). A nested architect's `add`
   and `commit` are allowed only after asking git (`diff --name-only HEAD`, the same with
   `--cached`, `ls-files --others`) which files the command would touch and checking each
   against the territory. Those two also refuse directories, git pathspec patterns and any
@@ -158,7 +187,38 @@ contribution turns it back on.
   on the PATH (Git Bash provides the first on Windows).
 - **The write guard knows the layout.** Sub-agents may write only under `crates/*/src`,
   `crates/*/tests`, `xtask/src` and `xtask/tests`. A project that keeps crates elsewhere updates the
-  `case` in `guard-writes.sh`.
+  `case` in `guard-writes.sh`. A designer is the exception: it writes only inside
+  `contributions/in-progress/<id>/design/`. An agent type the guard doesn't name isn't
+  fenced by it at all.
+- **The per-edit hook resolves real paths.** It takes the edited file's repo-relative path
+  from `territory.cjs`, as the guards do. A prefix strip hid every clippy error from
+  sub-agents when the project directory arrived in a Windows short name and the file in
+  the long one.
+
+## Upgrading an installed project
+
+`npx … --force` brings a newer harness: `.claude/` (agents, hooks, skills, this folder's
+`assets/`), `CLAUDE.md`, `CONTRIBUTING.md` and `AGENTS.md`. It doesn't touch the files this
+skill installed at the root, so a change to `assets/` reaches an installed project only
+when someone copies it. What each change needs, by the date it landed here:
+
+- **2026-11-10, the three test suites.** The upgrade brings the hooks' and the agents' side
+  of it. Until the root files follow, a test in `<name>_slow_tests.rs` or
+  `<name>_perf_tests.rs` still runs in every `cargo nextest run` and in `cargo xtask check`.
+  Copy from `assets/`, merging where the project has changed a file:
+  1. `.config/nextest.toml`: the `default-filter` line of `[profile.default]`, and the
+     `slow`, `perf` and `ci` profiles. A project with no crate named `xtask` puts one of its
+     own binaries' names where the filters say `xtask`.
+  2. `xtask/src/core/check_steps.rs` and `check_steps_tests.rs`: the `test` step's
+     arguments, and the tests that pin them.
+  3. `.github/workflows/ci.yml`: `--profile ci` on the coverage command.
+  4. `.cargo/mutants.toml`, and the comment in `.githooks/pre-push`.
+
+  Then run `cargo xtask check`.
+- **2026-11-10, the designer, the project board and the two `blocked-on-` labels.** Nothing
+  to copy: they live in `.claude/`, `CLAUDE.md` and `CONTRIBUTING.md`. `--force` overwrites
+  those last two, so carry your own settings and gotchas over, and add the **Project** line
+  to your settings.
 
 ## Versions
 
@@ -180,8 +240,45 @@ repository (read-only git, every other verb, hidden git, and the architect's `ad
 not to run project hooks at all, so don't take a quiet guard in that session as proof it
 allowed something; test a hook with hand-built input.
 
+The three test suites were added on 2026-11-10, after the sister TypeScript kit, where one
+slow UI test had refused three pushes in a row under the suite's own load. Measured in one
+place: scratch installs of these assets on Windows 11 (cargo 1.98.1, cargo-nextest 0.9.145,
+cargo-llvm-cov 0.9.1, cargo-mutants 27.1.0), with a slow and a perf test planted in
+`crates/shared`, each as a unit test and as an integration test.
+
+- `cargo nextest list --workspace` collected the starter tree's tests and none of the four
+  planted ones under the default profile, only the two slow ones under `--profile slow`,
+  only the two perf ones under `--profile perf`, and the starter tree plus the slow two
+  under `--profile ci`. The same held with one or with neither integration binary present.
+- A slow test ran alone by name under its profile. The same name with no profile exited 4,
+  "no tests to run", or 0 with `--no-tests=pass`, having run nothing. A misspelt profile
+  exited 96.
+- `binary(/_slow$/)` alone exited 96 in a workspace with no such binary, from the config,
+  and 94 as `-E`. With `xtask` named and excluded again it passed, and an integration test
+  named `tests/xtask.rs` stayed in the normal suite.
+- `cargo xtask check` passed, all eight steps, with four slow and perf tests present that
+  fail on purpose, and on a clean install. With the filter taken out of the `test` step
+  and the nextest config deleted, the same four failed the step. With the config deleted
+  and the step as shipped, no planted test ran, and the step failed only on the xtask test
+  that holds the two filters equal.
+- `cargo llvm-cov nextest --workspace --profile ci`, with CI's other arguments, ran under
+  the `ci` profile and collected the slow tests; with no profile it didn't.
+- `cargo mutants` on a function whose only telling test was a slow one: caught with its
+  default `cargo test`, missed with `test_tool = "nextest"`, from the flag and from
+  `.cargo/mutants.toml` alike.
+- `cargo test -p shared` ran every suite.
+
+Not measured: Linux, and the CI workflow itself. Without a nextest config, nextest's own
+fail-fast default returns, so a failing run of the `test` step stops at its first failure.
+
+The hooks have had their own tests since 2026-11-10 (`.claude/hooks/*.test.cjs`, 48 cases).
+Writing them reproduced a fault on Windows: with the project directory spelled with a
+short name and the file with the long one, the per-edit hook hid the edited file's clippy
+errors from the sub-agent that made them.
+
 When the toolchain or a tool's major version changes, re-run `cargo xtask check`, re-check the
-five negative cases, and update this section.
+five negative cases, re-run the suite measurements above and the hooks' tests, and update
+this section.
 
 ## Files
 
@@ -192,12 +289,13 @@ assets/
   rust-toolchain.toml        pinned channel and components
   rustfmt.toml  clippy.toml  deny.toml
   .cargo/config.toml         the `cargo xtask` alias
-  .config/nextest.toml       nextest profiles
+  .cargo/mutants.toml        cargo-mutants runs through nextest, so on the normal suite
+  .config/nextest.toml       nextest profiles: default (the normal suite), slow, perf, ci (normal + slow)
   gitattributes              copied to the root as .gitattributes; LF everywhere, since bash hooks break on CRLF
   gitignore                  copied to the root as .gitignore; target/, .claude/locks/, .claude/territories/
-  .githooks/pre-push         cargo xtask check
+  .githooks/pre-push         cargo xtask check (the normal test suite only)
   .github/dependabot.yml     weekly, grouped: cargo and actions
-  .github/workflows/ci.yml   check on Linux and Windows; coverage floor
+  .github/workflows/ci.yml   check on Linux and Windows; coverage floor, which runs the slow suite; never the perf suite
   crates/shared/             stub!
-  xtask/                     cargo xtask check: fmt, clippy, test, doctest, deny, machete, no-stubs, purity
+  xtask/                     cargo xtask check: fmt, clippy, test (the normal suite), doctest, deny, machete, no-stubs, purity
 ```

@@ -1,0 +1,8 @@
+# cargo-mutants, run by hand. By default it tests each mutant with `cargo test`, which has no
+# nextest profiles and so runs the slow and perf suites too: every mutant then waits on the
+# real clock, and a perf assertion that fails under the run's own load counts a mutant as
+# caught when nothing caught it. With nextest it runs the default profile, the normal suite.
+#
+# The other side of that: a function only a slow test reaches comes back with its mutants
+# missed. Give that logic a normal test where the contract allows one.
+test_tool = "nextest"

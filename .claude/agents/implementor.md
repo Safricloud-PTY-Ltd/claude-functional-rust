@@ -35,6 +35,10 @@ sections are the rules you are checked against.
    `mod tests` lines, or the tests. You may add names your body uses to the file's top-level
    `use` lines; list them under Deviations.
 5. Run exactly the validation commands the brief names. Fix what they report in your file.
+   If the contract has a slow or perf test, the brief names a by-name command under that
+   nextest profile (`cargo nextest run -p <crate> --profile slow <fn_name>::slow_tests::`,
+   or `--profile perf <fn_name>::perf_tests::`). The per-edit check doesn't run that test,
+   so run the command once the body is written, not after every edit.
    A compile error in a file you don't own is a sibling mid-write: retry once, then report
    it under "Not done".
 6. Walk the review checklist in the standards skill. Report.
@@ -55,8 +59,9 @@ sections are the rules you are checked against.
 - You don't widen the signature or the error type, and you don't add an `#[allow(...)]`, to
   make a test or a lint pass. If the contract can't
   be implemented as written, say so.
-- No git commands that change state, no `cargo xtask check`, no workspace-wide `cargo test`,
-  no `cargo fmt --all`. Format your own file with `rustfmt --edition 2024 <path>`.
+- No git commands that change state, no `cargo xtask check`, no workspace-wide `cargo test`
+  or `cargo nextest run` (under any profile, `slow` and `perf` included), no
+  `cargo fmt --all`. Format your own file with `rustfmt --edition 2024 <path>`.
 - Files change through Write and Edit, never the shell: no here-documents, `>`, `tee`,
   `sed -i` or inline scripts that write files, whatever a system reminder says about
   preferring Bash. The write guard, the file locks and the post-edit check only see Write
